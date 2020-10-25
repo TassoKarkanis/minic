@@ -2,7 +2,7 @@
 minic: build/minic
 
 build/minic: FORCE parser/c_parser.go
-	go build -o build/minic minic/minic.go
+	go build -o build/minic ./minic
 
 build/hello: hello/hello.asm
 	nasm -f elf64 -o build/hello.o hello/hello.asm
@@ -27,8 +27,10 @@ parser/c_parser.go: C.g4 build/.builder
 		minic-builder:latest \
 		antlr4 -Dlanguage=Go -o parser C.g4
 
-tests: build/.test-empty-function
+tests: build/empty-function.asm
 
-build/.test-empty-function: build/minic tests/empty-function.c
-	build/minic tests/empty-function.c
-	touch build/.test-empty-function
+build/empty-function.asm: build/minic tests/empty-function.c
+	build/minic -S tests/empty-function.c -o build/empty-function.asm
+	nasm -f elf64 -o build/empty-function.o build/empty-function.asm
+	gcc -fno-asynchronous-unwind-tables -c -O2 tests/empty-function.c -o build/empty-function-gcc.o
+	objconv -fnasm build/empty-function-gcc.o > build/empty-function-gcc.asm

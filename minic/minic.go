@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/TassoKarkanis/minic/parser"
@@ -12,109 +12,150 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type FunctionInfo struct {
-}
-
-type Listener struct {
+type Codegen struct {
 	*parser.BaseCListener
+	Output                   io.Writer
 	Symbols                  *symbols.Table
 	LastDeclaratorIdentifier string
 	LastType                 int // i.e. CParserVoid
 	LastFunction             *types.FunctionType
 }
 
-func NewListener() *Listener {
-	return &Listener{
+func NewCodegen(output io.Writer) *Codegen {
+	return &Codegen{
+		Output:  output,
 		Symbols: symbols.NewTable(),
 	}
 }
 
-func (l *Listener) EnterCompilationUnit(c *parser.CompilationUnitContext) {
-	fmt.Printf("EnterCompilationUnit(): %s\n", c.GetText())
+func (c *Codegen) EnterCompilationUnit(ctx *parser.CompilationUnitContext) {
+	fmt.Printf("EnterCompilationUnit(): %s\n", ctx.GetText())
 }
 
-func (l *Listener) ExitCompilationUnit(c *parser.CompilationUnitContext) {
+func (c *Codegen) ExitCompilationUnit(ctx *parser.CompilationUnitContext) {
 	fmt.Printf("ExitCompilationUnit()\n")
 }
 
-func (l *Listener) EnterExternalDeclaration(c *parser.ExternalDeclarationContext) {
-	fmt.Printf("EnterExternalDeclaration(): %s\n", c.GetText())
+func (c *Codegen) EnterExternalDeclaration(ctx *parser.ExternalDeclarationContext) {
+	fmt.Printf("EnterExternalDeclaration(): %s\n", ctx.GetText())
 }
 
-func (l *Listener) EnterFunctionDefinition(c *parser.FunctionDefinitionContext) {
-	fmt.Printf("EnterFunctionDefinition(): %s\n", c.GetText())
-	l.LastFunction = &types.FunctionType{}
-	l.Symbols.PushScope()
+func (c *Codegen) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
+	fmt.Printf("EnterFunctionDefinition(): %s\n", ctx.GetText())
+	c.LastFunction = &types.FunctionType{}
+	c.Symbols.PushScope()
 }
 
-func (l *Listener) ExitFunctionDefinition(c *parser.FunctionDefinitionContext) {
-	fmt.Printf("ExitFunctionDefinition(): %s\n", c.GetText())
-	l.Symbols.PopScope()
-	l.LastFunction = nil
+func (c *Codegen) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
+	fmt.Printf("ExitFunctionDefinition(): %s\n", ctx.GetText())
+	fmt.Fprintf(c.Output, "\tret\n\n")
+	c.Symbols.PopScope()
+	c.LastFunction = nil
 }
 
-func (l *Listener) EnterDeclarator(c *parser.DeclaratorContext) {
-	fmt.Printf("EnterDeclarator(): %s\n", c.GetText())
+func (c *Codegen) EnterDeclarator(ctx *parser.DeclaratorContext) {
+	fmt.Printf("EnterDeclarator(): %s\n", ctx.GetText())
 }
 
-func (l *Listener) EnterDirectDeclaratorFunction(c *parser.DirectDeclaratorFunctionContext) {
-	fmt.Printf("EnterDirectDeclaratorFunction(): %s\n", c.GetText())
-	l.Symbols.AddSymbol(l.LastFunction.Name, l.LastFunction)
+func (c *Codegen) EnterDirectDeclaratorFunction(ctx *parser.DirectDeclaratorFunctionContext) {
+	fmt.Printf("EnterDirectDeclaratorFunction(): %s\n", ctx.GetText())
 }
 
-func (l *Listener) ExitDirectDeclaratorFunction(c *parser.DirectDeclaratorFunctionContext) {
-	fmt.Printf("ExitDirectDeclaratorFunction(): %s\n", c.GetText())
+func (c *Codegen) ExitDirectDeclaratorFunction(ctx *parser.DirectDeclaratorFunctionContext) {
+	fmt.Printf("ExitDirectDeclaratorFunction(): %s\n", ctx.GetText())
 }
 
-func (l *Listener) EnterDirectDeclaratorIdentifier(c *parser.DirectDeclaratorIdentifierContext) {
-	fmt.Printf("EnterDirectDeclaratorIdentifier(): %s\n", c.GetText())
-	l.LastDeclaratorIdentifier = c.Identifier().GetText()
-	fmt.Printf("LastDeclaratorIdentifier: %s\n", l.LastDeclaratorIdentifier)
+func (c *Codegen) EnterDirectDeclaratorIdentifier(ctx *parser.DirectDeclaratorIdentifierContext) {
+	fmt.Printf("EnterDirectDeclaratorIdentifier(): %s\n", ctx.GetText())
+	c.LastDeclaratorIdentifier = ctx.Identifier().GetText()
+	fmt.Printf("LastDeclaratorIdentifier: %s\n", c.LastDeclaratorIdentifier)
 }
 
-func (l *Listener) EnterTypeSpecifierSimple(c *parser.TypeSpecifierSimpleContext) {
-	fmt.Printf("EnterTypeSpecifierSimple(): %s\n", c.GetText())
-	fmt.Printf("  GetStart(): %s\n", c.GetStart().GetText())
-	l.LastType = c.GetStart().GetTokenType()
-	fmt.Printf("LastType: %v\n", l.LastType)
+func (c *Codegen) EnterTypeSpecifierSimple(ctx *parser.TypeSpecifierSimpleContext) {
+	fmt.Printf("EnterTypeSpecifierSimple(): %s\n", ctx.GetText())
+	fmt.Printf("  GetStart(): %s\n", ctx.GetStart().GetText())
+	c.LastType = ctx.GetStart().GetTokenType()
+	fmt.Printf("LastType: %v\n", c.LastType)
 }
 
-func (l *Listener) EnterParameterTypeList(c *parser.ParameterTypeListContext) {
-	fmt.Printf("EnterParameterTypeList(): %s\n", c.GetText())
-	cp := c.GetParser().(*parser.CParser)
-	l.LastFunction.ReturnType = types.NewBasicType(l.LastType, cp)
-	l.LastFunction.Name = l.LastDeclaratorIdentifier
+func (c *Codegen) EnterParameterTypeList(ctx *parser.ParameterTypeListContext) {
+	fmt.Printf("EnterParameterTypeList(): %s\n", ctx.GetText())
+	cp := ctx.GetParser().(*parser.CParser)
+	name := c.LastDeclaratorIdentifier
+	c.LastFunction.ReturnType = types.NewBasicType(c.LastType, cp)
+	c.LastFunction.Name = name
+	c.Symbols.AddSymbol(name, c.LastFunction)
+	fmt.Fprintf(c.Output, "%s:\n", name)
 }
 
-func (l *Listener) EnterCompoundStatement(c *parser.CompoundStatementContext) {
-	fmt.Printf("EnterCompoundStatement(): %s\n", c.GetText())
+func (c *Codegen) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
+	fmt.Printf("EnterCompoundStatement(): %s\n", ctx.GetText())
 }
 
 type Options struct {
-	ProgramFile string
+	OutputFile  string
+	CompileOnly bool
+	CodegenOnly bool
+}
+
+func runPrepass(inputFile string, output io.Writer) error {
+	// setup the input
+	is, err := antlr.NewFileStream(inputFile)
+	if err != nil {
+		return err
+	}
+
+	// Create the Lexer
+	lexer := parser.NewCLexer(is)
+	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+
+	// Create the Parser
+	p := parser.NewCParser(stream)
+
+	// Finally parse the expression
+	prepass := NewPrepass(output)
+	antlr.ParseTreeWalkerDefault.Walk(prepass, p.CompilationUnit())
+	return nil
+}
+
+func runCodegen(inputFile string, output io.Writer) error {
+	// setup the input
+	is, err := antlr.NewFileStream(inputFile)
+	if err != nil {
+		return err
+	}
+
+	// Create the Lexer
+	lexer := parser.NewCLexer(is)
+	stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
+
+	// Create the Parser
+	p := parser.NewCParser(stream)
+
+	// Finally parse the expression
+	codegen := NewCodegen(output)
+	antlr.ParseTreeWalkerDefault.Walk(codegen, p.CompilationUnit())
+	return nil
 }
 
 func mainE(options Options, modules []string) error {
+	// open the output file
+	output, err := os.Create(options.OutputFile)
+	if err != nil {
+		return err
+	}
+
 	for _, module := range modules {
-		// read the module
-		data, err := ioutil.ReadFile(module)
+		err = runPrepass(module, output)
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(output, "\n")
 
-		// setup the input
-		is := antlr.NewInputStream(string(data))
-
-		// Create the Lexer
-		lexer := parser.NewCLexer(is)
-		stream := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
-
-		// Create the Parser
-		p := parser.NewCParser(stream)
-
-		// Finally parse the expression
-		listener := NewListener()
-		antlr.ParseTreeWalkerDefault.Walk(listener, p.CompilationUnit())
+		err = runCodegen(module, output)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -132,7 +173,25 @@ func main() {
 	}
 
 	flags := cobraCmd.Flags()
-	flags.StringVarP(&options.ProgramFile, "program", "o", "a.out", "output file name")
+
+	flags.BoolVarP(
+		&options.CompileOnly,
+		"compile-only",
+		"c",
+		false,
+		"compile only and don't run linker")
+	flags.StringVarP(
+		&options.OutputFile,
+		"output",
+		"o",
+		"a.out",
+		"output to this file")
+	flags.BoolVarP(
+		&options.CodegenOnly,
+		"codegen-only",
+		"S",
+		false,
+		"generate code only and don't assemble or run linker")
 
 	err := cobraCmd.Execute()
 	if err != nil {
