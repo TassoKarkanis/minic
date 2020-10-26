@@ -27,10 +27,17 @@ parser/c_parser.go: C.g4 build/.builder
 		minic-builder:latest \
 		antlr4 -Dlanguage=Go -o parser C.g4
 
-tests: build/empty-function.asm
+C_TESTS := $(shell find tests -name "*.c")
+$(info $$C_TESTS is [${C_TESTS}])
 
-build/empty-function.asm: build/minic tests/empty-function.c
-	build/minic -S tests/empty-function.c -o build/empty-function.asm
-	nasm -f elf64 -o build/empty-function.o build/empty-function.asm
-	gcc -fno-asynchronous-unwind-tables -c -O2 tests/empty-function.c -o build/empty-function-gcc.o
-	objconv -fnasm build/empty-function-gcc.o > build/empty-function-gcc.asm
+TEST_TARGETS := $(C_TESTS:tests/%.c=build/%.asm)
+$(info $$TEST_TARGETS is [${TEST_TARGETS}])
+
+tests: $(TEST_TARGETS)
+
+build/%.asm : tests/%.c build/minic
+	build/minic -S $< -o $@
+	@diff -c $(<:.c=.asm) $@
+	@nasm -f elf64 -o $(@:.asm=.o) $@
+	@gcc -fno-asynchronous-unwind-tables -c -O2 $< -o $(@:.asm=-gcc.o)
+	@objconv -v0 -fnasm $(@:.asm=-gcc.o) $(@:.asm=-gcc.asm)
