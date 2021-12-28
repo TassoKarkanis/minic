@@ -8,10 +8,10 @@ import (
 
 // Type category
 const (
-	Basic    = iota
-	Pointer  = iota
-	Struct   = iota
-	Function = iota
+	Basic = iota
+	Pointer
+	Struct
+	Function
 )
 
 type Type interface {

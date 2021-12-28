@@ -4,6 +4,7 @@ section .text
 	global f
 
 f:
-	mov eax, 1
+	mov r9d, 1
+	add r9d, 1
+	mov eax, r9d
 	ret
-

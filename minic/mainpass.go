@@ -16,7 +16,7 @@ type MainPass struct {
 	LastDeclaratorIdentifier string
 	LastType                 int // i.e. CParserVoid
 	LastFunction             *types.FunctionType
-	Codegen                  *Codegen
+	cgen                     *Codegen
 }
 
 func NewMainPass(output io.Writer) *MainPass {
@@ -38,18 +38,22 @@ func (c *MainPass) EnterExternalDeclaration(ctx *parser.ExternalDeclarationConte
 	fmt.Printf("EnterExternalDeclaration(): %s\n", ctx.GetText())
 }
 
+func (c *MainPass) ExitExternalDeclaration(ctx *parser.ExternalDeclarationContext) {
+	fmt.Printf("ExitExternalDeclaration(): %s\n", ctx.GetText())
+}
+
 func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
 	fmt.Printf("EnterFunctionDefinition(): %s\n", ctx.GetText())
 	c.LastFunction = &types.FunctionType{}
 	c.Symbols.PushScope()
-	c.Codegen = NewCodegen()
+	c.cgen = NewCodegen(c.Output)
 }
 
 func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
 	fmt.Printf("ExitFunctionDefinition(): %s\n", ctx.GetText())
-	fmt.Fprintf(c.Output, "\tret\n\n")
 	c.Symbols.PopScope()
 	c.LastFunction = nil
+	c.cgen.Close()
 }
 
 func (c *MainPass) EnterDeclarator(ctx *parser.DeclaratorContext) {
@@ -98,20 +102,15 @@ func (c *MainPass) EnterJumpStatement(ctx *parser.JumpStatementContext) {
 func (c *MainPass) ExitJumpStatement(ctx *parser.JumpStatementContext) {
 	fmt.Printf("ExitJumpStatement(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(true)
-
 	switch {
 	case ctx.Return() != nil:
 		expr := ctx.Expression()
 		if expr != nil {
-			fmt.Printf(" got value!\n")
-			value := cgen.GetValue(expr)
-			reg1 := cgen.GetReturnRegister()
-			load := cgen.LoadValue(value)
-			fmt.Fprintf(c.Output, "\tmov %s, %s\n", reg1.Name(4), load)
+			c.cgen.ReturnValue(expr)
+			c.cgen.ReleaseValue(expr)
+		} else {
+			c.cgen.Return()
 		}
-		fmt.Fprintf(c.Output, "\tret\n")
 	}
 }
 
@@ -122,15 +121,12 @@ func (c *MainPass) EnterExpression(ctx *parser.ExpressionContext) {
 func (c *MainPass) ExitExpression(ctx *parser.ExpressionContext) {
 	fmt.Printf("ExitExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(true)
-
 	exp1 := ctx.AssignmentExpression()
 	exp2 := ctx.Expression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -144,14 +140,11 @@ func (c *MainPass) EnterAssignmentExpression(ctx *parser.AssignmentExpressionCon
 func (c *MainPass) ExitAssignmentExpression(ctx *parser.AssignmentExpressionContext) {
 	fmt.Printf("ExitAssignmentExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(true)
-
 	exp1 := ctx.ConditionalExpression()
 
 	switch {
 	case exp1 != nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -162,11 +155,8 @@ func (c *MainPass) ExitConditionalExpression(ctx *parser.ConditionalExpressionCo
 	fmt.Printf("ExitConditionalExpression(): %s\n", ctx.GetText())
 	fmt.Printf("  LogicalOrExpression: %v\n", ctx.LogicalOrExpression() != nil)
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.LogicalOrExpression()
-	cgen.CopyValue(ctx, exp1)
+	c.cgen.MoveValue(ctx, exp1)
 }
 
 func (c *MainPass) EnterLogicalOrExpression(ctx *parser.LogicalOrExpressionContext) {
@@ -176,15 +166,12 @@ func (c *MainPass) EnterLogicalOrExpression(ctx *parser.LogicalOrExpressionConte
 func (c *MainPass) ExitLogicalOrExpression(ctx *parser.LogicalOrExpressionContext) {
 	fmt.Printf("ExitLogicalOrExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.LogicalAndExpression()
 	exp2 := ctx.LogicalOrExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -198,15 +185,12 @@ func (c *MainPass) EnterLogicalAndExpression(ctx *parser.LogicalAndExpressionCon
 func (c *MainPass) ExitLogicalAndExpression(ctx *parser.LogicalAndExpressionContext) {
 	fmt.Printf("ExitLogicalAndExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.InclusiveOrExpression()
 	exp2 := ctx.LogicalAndExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -220,15 +204,12 @@ func (c *MainPass) EnterInclusiveOrExpression(ctx *parser.InclusiveOrExpressionC
 func (c *MainPass) ExitInclusiveOrExpression(ctx *parser.InclusiveOrExpressionContext) {
 	fmt.Printf("ExitInclusiveOrExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.ExclusiveOrExpression()
 	exp2 := ctx.InclusiveOrExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -242,15 +223,12 @@ func (c *MainPass) EnterExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionC
 func (c *MainPass) ExitExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionContext) {
 	fmt.Printf("ExitExclusiveOrExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.AndExpression()
 	exp2 := ctx.ExclusiveOrExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -264,15 +242,12 @@ func (c *MainPass) EnterAndExpression(ctx *parser.AndExpressionContext) {
 func (c *MainPass) ExitAndExpression(ctx *parser.AndExpressionContext) {
 	fmt.Printf("ExitAndExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.EqualityExpression()
 	exp2 := ctx.AndExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -286,15 +261,12 @@ func (c *MainPass) EnterEqualityExpression(ctx *parser.EqualityExpressionContext
 func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext) {
 	fmt.Printf("ExitEqualityExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.RelationalExpression()
 	exp2 := ctx.EqualityExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -308,15 +280,12 @@ func (c *MainPass) EnterRelationalExpression(ctx *parser.RelationalExpressionCon
 func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionContext) {
 	fmt.Printf("ExitRelationalExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.ShiftExpression()
 	exp2 := ctx.RelationalExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -330,15 +299,12 @@ func (c *MainPass) EnterShiftExpression(ctx *parser.ShiftExpressionContext) {
 func (c *MainPass) ExitShiftExpression(ctx *parser.ShiftExpressionContext) {
 	fmt.Printf("ExitShiftExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.AdditiveExpression()
 	exp2 := ctx.ShiftExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -352,15 +318,33 @@ func (c *MainPass) EnterAdditiveExpression(ctx *parser.AdditiveExpressionContext
 func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext) {
 	fmt.Printf("ExitAdditiveExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
+	e1 := ctx.MultiplicativeExpression()
+	e2 := ctx.AdditiveExpression()
+	plus := ctx.Plus()
+	minus := ctx.Minus()
 
-	exp1 := ctx.MultiplicativeExpression()
-	exp2 := ctx.AdditiveExpression()
+	fmt.Printf("e1: %v\n", e1)
+	fmt.Printf("e2: %v\n", e2)
+	fmt.Printf("plus: %v\n", plus)
+	fmt.Printf("minus: %v\n", minus)
 
 	switch {
-	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+	case e1 != nil && e2 == nil:
+		c.cgen.MoveValue(ctx, e1)
+
+	case e1 != nil && e2 != nil && plus != nil:
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+		c.cgen.Add(ctx, v1, v2)
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
+
+	case e1 != nil && e2 != nil && minus != nil:
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+		c.cgen.Subtract(ctx, v1, v2)
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
 
 	default:
 		panic("unhandled case!")
@@ -374,15 +358,12 @@ func (c *MainPass) EnterMultiplicativeExpression(ctx *parser.MultiplicativeExpre
 func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpressionContext) {
 	fmt.Printf("ExitMultiplicativeExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.CastExpression()
 	exp2 := ctx.MultiplicativeExpression()
 
 	switch {
 	case exp1 != nil && exp2 == nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -399,16 +380,13 @@ func (c *MainPass) ExitCastExpression(ctx *parser.CastExpressionContext) {
 	fmt.Printf("  CastExpression: %v\n", ctx.CastExpression() != nil)
 	fmt.Printf("  UnaryExpression: %v\n", ctx.UnaryExpression() != nil)
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.TypeName()
 	exp2 := ctx.CastExpression()
 	exp3 := ctx.UnaryExpression()
 
 	switch {
 	case exp1 == nil && exp2 == nil && exp3 != nil:
-		cgen.CopyValue(ctx, exp3)
+		c.cgen.MoveValue(ctx, exp3)
 
 	default:
 		panic("unhandled case!")
@@ -422,14 +400,11 @@ func (c *MainPass) EnterUnaryExpression(ctx *parser.UnaryExpressionContext) {
 func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
 	fmt.Printf("ExitUnaryExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.PostfixExpression()
 
 	switch {
 	case exp1 != nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -443,14 +418,11 @@ func (c *MainPass) EnterPostfixExpression(ctx *parser.PostfixExpressionContext) 
 func (c *MainPass) ExitPostfixExpression(ctx *parser.PostfixExpressionContext) {
 	fmt.Printf("ExitPostfixExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	exp1 := ctx.PrimaryExpression()
 
 	switch {
 	case exp1 != nil:
-		cgen.CopyValue(ctx, exp1)
+		c.cgen.MoveValue(ctx, exp1)
 
 	default:
 		panic("unhandled case!")
@@ -468,17 +440,13 @@ func (c *MainPass) EnterPrimaryExpression(ctx *parser.PrimaryExpressionContext) 
 func (c *MainPass) ExitPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
 	fmt.Printf("ExitPrimaryExpression(): %s\n", ctx.GetText())
 
-	cgen := NewCodegenContext(c.Codegen)
-	defer cgen.Close(false)
-
 	cp := ctx.GetParser().(*parser.CParser)
 	tok := ctx.GetStart()
 
 	switch {
 	case tok.GetTokenType() == parser.CLexerConstant:
 		typ := types.NewBasicType(parser.CParserInt, cp)
-		val := cgen.NewConstant(tok.GetText(), typ)
-		cgen.SetValue(ctx, val)
+		c.cgen.CreateIntValue(ctx, typ, tok.GetText())
 
 	default:
 		panic("unhandled case!")
