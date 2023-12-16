@@ -4,7 +4,11 @@ section .text
 	global f
 
 f:
-	mov r9d, 1
-	add r9d, 1
-	mov eax, r9d
+	mov eax, 1
+	add eax, 1
+	mov dword [rsp - 4], eax
+	mov eax, dword [rsp - 4]
+	jmp blah.end
+blah.end:
 	ret
+

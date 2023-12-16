@@ -6,6 +6,12 @@ import (
 	"github.com/TassoKarkanis/minic/parser"
 )
 
+// void, int, float
+// int*
+// int**
+// int[3]
+// void f(int)
+
 // Type category
 const (
 	Basic = iota
@@ -15,7 +21,7 @@ const (
 )
 
 type Type interface {
-	GetCategory() int
+	Category() int
 	String() string
 }
 
@@ -35,7 +41,7 @@ func NewBasicType(type_ int, cp *parser.CParser) *BasicType {
 	}
 }
 
-func (t *BasicType) GetCategory() int {
+func (t *BasicType) Category() int {
 	return Basic
 }
 
@@ -52,7 +58,7 @@ type PointerType struct {
 	DerefCount int
 }
 
-func (t *PointerType) GetCategory() int {
+func (t *PointerType) Category() int {
 	return Pointer
 }
 
@@ -74,7 +80,7 @@ type StructType struct {
 	Fields []Field
 }
 
-func (t *StructType) GetCategory() int {
+func (t *StructType) Category() int {
 	return Struct
 }
 
@@ -97,7 +103,7 @@ type FunctionType struct {
 	Params     []Param
 }
 
-func (t *FunctionType) GetCategory() int {
+func (t *FunctionType) Category() int {
 	return Function
 }
 
@@ -107,8 +113,19 @@ func (t *FunctionType) String() string {
 		if i > 0 {
 			rep += ", "
 		}
-		rep += param.Type.String()
+
+		paramStr := "<none>"
+		if param.Type != nil {
+			paramStr = param.Type.String()
+		}
+
+		rep += paramStr
 	}
-	rep = t.ReturnType.String() + t.Name + "(" + rep + ")"
+
+	returnType := "<none>"
+	if t.ReturnType != nil {
+		returnType = t.ReturnType.String()
+	}
+	rep = returnType + t.Name + "(" + rep + ")"
 	return rep
 }

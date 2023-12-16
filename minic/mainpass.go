@@ -4,25 +4,53 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/TassoKarkanis/minic/codegen"
 	"github.com/TassoKarkanis/minic/parser"
 	"github.com/TassoKarkanis/minic/symbols"
 	"github.com/TassoKarkanis/minic/types"
+	"github.com/antlr/antlr4/runtime/Go/antlr"
 )
+
+type Declaration struct {
+	Name string
+	Type types.Type
+}
+
+func (d Declaration) String() string {
+	name := "<none>"
+	if d.Name != "" {
+		name = d.Name
+	}
+
+	typeStr := "<none>"
+	if d.Type != nil {
+		typeStr = d.Type.String()
+	}
+
+	return fmt.Sprintf("%s %s", name, typeStr)
+}
 
 type MainPass struct {
 	*parser.BaseCListener
-	Output                   io.Writer
-	Symbols                  *symbols.Table
-	LastDeclaratorIdentifier string
-	LastType                 int // i.e. CParserVoid
-	LastFunction             *types.FunctionType
-	cgen                     *Codegen
+	Output             io.Writer
+	Symbols            *symbols.Table
+	Function           *types.FunctionType
+	cgen               *codegen.Codegen
+	Err                error
+	Types              map[antlr.ParserRuleContext]types.Type
+	Declarations       map[antlr.ParserRuleContext]Declaration
+	EnterContinuations map[antlr.ParserRuleContext]func()
+	ExitContinuations  map[antlr.ParserRuleContext]func()
 }
 
 func NewMainPass(output io.Writer) *MainPass {
 	return &MainPass{
-		Output:  output,
-		Symbols: symbols.NewTable(),
+		Output:             output,
+		Symbols:            symbols.NewTable(),
+		Types:              make(map[antlr.ParserRuleContext]types.Type),
+		Declarations:       make(map[antlr.ParserRuleContext]Declaration),
+		EnterContinuations: make(map[antlr.ParserRuleContext]func()),
+		ExitContinuations:  make(map[antlr.ParserRuleContext]func()),
 	}
 }
 
@@ -44,55 +72,337 @@ func (c *MainPass) ExitExternalDeclaration(ctx *parser.ExternalDeclarationContex
 
 func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
 	fmt.Printf("EnterFunctionDefinition(): %s\n", ctx.GetText())
-	c.LastFunction = &types.FunctionType{}
-	c.Symbols.PushScope()
-	c.cgen = NewCodegen(c.Output)
+
+	if c.Function != nil {
+		c.fail("nested function not implemented")
+	}
+
+	c.Function = &types.FunctionType{}
+
+	// make sure the return type is set
+	{
+		if ctx.DeclarationSpecifiers() == nil {
+			c.fail("return type not specified")
+		}
+		declSpecs := ctx.DeclarationSpecifiers().(*parser.DeclarationSpecifiersContext)
+		if declSpecs.DeclarationSpecifier(1) != nil {
+			c.fail("invalid return types")
+		}
+
+		declSpec := declSpecs.DeclarationSpecifier(0).(*parser.DeclarationSpecifierContext)
+		c.setExitContinuation(declSpec, func() {
+			c.Function.ReturnType = c.Types[declSpec]
+		})
+	}
+
+	// make sure the function name and parameters are set
+	{
+		declarator := ctx.Declarator()
+		c.setExitContinuation(declarator, func() {
+			decl := c.Declarations[declarator]
+			c.Function.Name = decl.Name
+			c.Function.Params = decl.Type.(*types.FunctionType).Params
+		})
+	}
+
+	// generate the function prologue on entry of the statements
+	c.setEnterContinuation(ctx.CompoundStatement(), func() {
+		fmt.Printf("  starting function: %s\n", c.Function)
+
+		// get the parameter types
+		var types []types.Type
+		for _, param := range c.Function.Params {
+			types = append(types, param.Type)
+		}
+
+		values := c.cgen.StartStackFrame(c.Function.Name, types)
+
+		// add symbols for the parameters
+		for i, param := range c.Function.Params {
+			c.Symbols.AddSymbol(param.Name, param.Type, values[i])
+		}
+
+		// add the global symbol for the function
+		funcValue := codegen.NewGlobalValue(c.Function.Name, c.Function)
+		c.Symbols.AddSymbol(c.Function.Name, c.Function, funcValue)
+
+		// push the scope for the function
+		c.Symbols.PushScope()
+	})
+
+	c.cgen = codegen.NewCodegen(c.Output)
 }
 
 func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
 	fmt.Printf("ExitFunctionDefinition(): %s\n", ctx.GetText())
 	c.Symbols.PopScope()
-	c.LastFunction = nil
+	c.cgen.EndStackFrame()
 	c.cgen.Close()
+
+	c.Function = nil
+}
+
+func (c *MainPass) EnterDeclarationSpecifiers(ctx *parser.DeclarationSpecifiersContext) {
+	fmt.Printf("EnterDeclarationsSpecifier(): %s\n", ctx.GetText())
+	c.runEnterContinuation(ctx)
+}
+
+func (c *MainPass) ExitDeclarationSpecifiers(ctx *parser.DeclarationSpecifiersContext) {
+	fmt.Printf("ExitDeclarationSpecifiers(): %s\n", ctx.GetText())
+
+	if ctx.DeclarationSpecifier(1) != nil {
+		c.fail("multiple declaration specifiers!")
+	}
+
+	// forward
+	c.Types[ctx] = c.Types[ctx.DeclarationSpecifier(0)]
+
+	fmt.Printf("  result: %s\n", c.Types[ctx])
+
+	c.runExitContinuation(ctx)
+}
+
+func (c *MainPass) EnterDeclarationSpecifier(ctx *parser.DeclarationSpecifierContext) {
+	fmt.Printf("EnterDeclarationSpecifier(): %s\n", ctx.GetText())
+	c.runEnterContinuation(ctx)
+}
+
+func (c *MainPass) ExitDeclarationSpecifier(ctx *parser.DeclarationSpecifierContext) {
+	fmt.Printf("ExitDeclarationSpecifier(): %s\n", ctx.GetText())
+
+	typeSpec := ctx.TypeSpecifier()
+	switch {
+	case typeSpec != nil:
+		// forward the type
+		c.Types[ctx] = c.Types[typeSpec]
+
+	default:
+		c.fail("unsupported type")
+	}
+
+	fmt.Printf("  result: %s\n", c.Types[ctx])
+
+	c.runExitContinuation(ctx)
 }
 
 func (c *MainPass) EnterDeclarator(ctx *parser.DeclaratorContext) {
 	fmt.Printf("EnterDeclarator(): %s\n", ctx.GetText())
+	c.runEnterContinuation(ctx)
 }
 
-func (c *MainPass) EnterDirectDeclaratorFunction(ctx *parser.DirectDeclaratorFunctionContext) {
-	fmt.Printf("EnterDirectDeclaratorFunction(): %s\n", ctx.GetText())
+func (c *MainPass) ExitDeclarator(ctx *parser.DeclaratorContext) {
+	fmt.Printf("ExitDeclarator(): %s\n", ctx.GetText())
+
+	if ctx.Pointer() != nil {
+		c.fail("pointers not yet supported")
+	}
+
+	// forward
+	c.Declarations[ctx] = c.Declarations[ctx.DirectDeclarator()]
+
+	c.runExitContinuation(ctx)
 }
 
-func (c *MainPass) ExitDirectDeclaratorFunction(ctx *parser.DirectDeclaratorFunctionContext) {
-	fmt.Printf("ExitDirectDeclaratorFunction(): %s\n", ctx.GetText())
+func (c *MainPass) EnterDirectDeclarator(ctx *parser.DirectDeclaratorContext) {
+	fmt.Printf("EnterDirectDeclarator(): %s\n", ctx.GetText())
 }
 
-func (c *MainPass) EnterDirectDeclaratorIdentifier(ctx *parser.DirectDeclaratorIdentifierContext) {
-	fmt.Printf("EnterDirectDeclaratorIdentifier(): %s\n", ctx.GetText())
-	c.LastDeclaratorIdentifier = ctx.Identifier().GetText()
-	fmt.Printf("LastDeclaratorIdentifier: %s\n", c.LastDeclaratorIdentifier)
+func (c *MainPass) ExitDirectDeclarator(ctx *parser.DirectDeclaratorContext) {
+	fmt.Printf("ExitDirectDeclarator(): %s\n", ctx.GetText())
+
+	ident := ctx.Identifier()
+	directDecl := ctx.DirectDeclarator()
+	colon := ctx.Colon()
+	params := ctx.ParameterTypeList()
+
+	switch {
+	case ident != nil && colon == nil:
+		c.Declarations[ctx] = Declaration{
+			Name: ident.GetSymbol().GetText(),
+		}
+
+	case directDecl != nil && params != nil:
+		decl := c.Declarations[directDecl]
+		f := c.Types[params].(*types.FunctionType)
+		c.Declarations[ctx] = Declaration{
+			Name: decl.Name,
+			Type: &types.FunctionType{
+				Name:   decl.Name,
+				Params: f.Params,
+			},
+		}
+
+	default:
+		c.fail("unsupported direct declarator")
+	}
 }
 
-func (c *MainPass) EnterTypeSpecifierSimple(ctx *parser.TypeSpecifierSimpleContext) {
-	fmt.Printf("EnterTypeSpecifierSimple(): %s\n", ctx.GetText())
-	fmt.Printf("  GetStart(): %s\n", ctx.GetStart().GetText())
-	c.LastType = ctx.GetStart().GetTokenType()
-	fmt.Printf("LastType: %v\n", c.LastType)
+func (c *MainPass) EnterTypeSpecifier(ctx *parser.TypeSpecifierContext) {
+	fmt.Printf("EnterTypeSpecifier(): %s\n", ctx.GetText())
+}
+
+func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
+	fmt.Printf("ExitTypeSpecifier(): %s\n", ctx.GetText())
+
+	cp := ctx.GetParser().(*parser.CParser)
+
+	typ_void := ctx.Void()
+
+	typ_char := ctx.Char()
+	typ_short := ctx.Short()
+	typ_int := ctx.Int()
+	typ_long := ctx.Long()
+
+	typ_float := ctx.Float()
+	typ_double := ctx.Double()
+
+	setBasicType := func(parserType int) {
+		typ := types.NewBasicType(parserType, cp)
+		fmt.Printf("  setBasicType(): %s\n", typ)
+		c.Types[ctx] = typ
+	}
+
+	switch {
+	case typ_void != nil:
+		setBasicType(parser.CParserVoid)
+
+	case typ_char != nil:
+		setBasicType(parser.CParserChar)
+
+	case typ_short != nil:
+		setBasicType(parser.CParserShort)
+
+	case typ_int != nil:
+		setBasicType(parser.CParserInt)
+
+	case typ_long != nil:
+		setBasicType(parser.CParserLong)
+
+	case typ_float != nil:
+		setBasicType(parser.CParserFloat)
+
+	case typ_double != nil:
+		setBasicType(parser.CParserDouble)
+
+	default:
+		c.fail("type specifier not supported")
+	}
+
+	fmt.Printf("  result: %s\n", c.Types[ctx])
 }
 
 func (c *MainPass) EnterParameterTypeList(ctx *parser.ParameterTypeListContext) {
 	fmt.Printf("EnterParameterTypeList(): %s\n", ctx.GetText())
-	cp := ctx.GetParser().(*parser.CParser)
-	name := c.LastDeclaratorIdentifier
-	c.LastFunction.ReturnType = types.NewBasicType(c.LastType, cp)
-	c.LastFunction.Name = name
-	c.Symbols.AddSymbol(name, c.LastFunction)
-	fmt.Fprintf(c.Output, "%s:\n", name)
+}
+
+func (c *MainPass) ExitParameterTypeList(ctx *parser.ParameterTypeListContext) {
+	fmt.Printf("ExitParameterTypeList(): %s\n", ctx.GetText())
+
+	paramList := ctx.ParameterList()
+	ellipsis := ctx.Ellipsis()
+
+	switch {
+	case paramList != nil && ellipsis == nil:
+		params := c.Types[paramList].(*types.FunctionType)
+		c.Types[ctx] = &types.FunctionType{
+			Params: params.Params,
+		}
+
+	default:
+		c.fail("varargs not supported")
+	}
+
+	fmt.Printf("  result: %+v\n", c.Types[ctx])
+}
+
+func (c *MainPass) EnterParameterList(ctx *parser.ParameterListContext) {
+	fmt.Printf("EnterParameterList(): %s\n", ctx.GetText())
+}
+
+func (c *MainPass) ExitParameterList(ctx *parser.ParameterListContext) {
+	fmt.Printf("ExitParameterList(): %s\n", ctx.GetText())
+
+	paramDecl := ctx.ParameterDeclaration()
+	paramList := ctx.ParameterList()
+
+	switch {
+	case paramDecl != nil && paramList == nil:
+		param := c.Declarations[paramDecl]
+		c.Types[ctx] = &types.FunctionType{
+			Params: []types.Param{
+				types.Param{
+					Name: param.Name,
+					Type: param.Type,
+				},
+			},
+		}
+
+	case paramList != nil && paramDecl != nil:
+		params := c.Types[paramList].(*types.FunctionType)
+		param := c.Declarations[paramDecl]
+		c.Types[ctx] = &types.FunctionType{
+			Params: append(params.Params, types.Param{
+				Name: param.Name,
+				Type: param.Type,
+			}),
+		}
+
+	default:
+		c.fail("ExitParameterList: invalid case")
+	}
+
+	fmt.Printf("  result: %+v\n", c.Types[ctx])
+}
+
+func (c *MainPass) EnterParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
+	fmt.Printf("EnterParameterDeclaration(): %s\n", ctx.GetText())
+}
+
+func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
+	fmt.Printf("ExitParameterDeclaration(): %s\n", ctx.GetText())
+
+	declSpec := ctx.DeclarationSpecifiers()
+	declarator := ctx.Declarator()
+
+	switch {
+	case declSpec != nil && declarator != nil:
+		typ := c.Types[declSpec]
+		decl := c.Declarations[declarator]
+		fmt.Printf("  typ: %s\n", typ)
+		fmt.Printf("  decl: %s\n", decl)
+
+		if decl.Type == nil {
+			c.Declarations[ctx] = Declaration{
+				Name: decl.Name,
+				Type: typ,
+			}
+		} else {
+			f := decl.Type.(*types.FunctionType)
+			c.Declarations[ctx] = Declaration{
+				Name: decl.Name,
+				Type: &types.FunctionType{
+					Name:       f.Name,
+					ReturnType: typ,
+					Params:     f.Params,
+				},
+			}
+		}
+
+	default:
+		c.fail("ExitParameterDeclaration: invalid case")
+	}
+
+	fmt.Printf("  result: %+v\n", c.Declarations[ctx])
 }
 
 func (c *MainPass) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
 	fmt.Printf("EnterCompoundStatement(): %s\n", ctx.GetText())
+	c.runEnterContinuation(ctx)
+}
+
+func (c *MainPass) ExitCompoundStatement(ctx *parser.CompoundStatementContext) {
+	fmt.Printf("ExitCompoundStatement(): %s\n", ctx.GetText())
+	c.runExitContinuation(ctx)
 }
 
 func (c *MainPass) EnterJumpStatement(ctx *parser.JumpStatementContext) {
@@ -448,7 +758,47 @@ func (c *MainPass) ExitPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
 		typ := types.NewBasicType(parser.CParserInt, cp)
 		c.cgen.CreateIntValue(ctx, typ, tok.GetText())
 
+	case ctx.Identifier() != nil:
+		fmt.Printf("ExitPrimaryExpression(): identifier(%s)\n", ctx.Identifier().GetText())
+
 	default:
 		panic("unhandled case!")
 	}
+}
+
+func (c *MainPass) setEnterContinuation(ctx antlr.ParserRuleContext, f func()) {
+	_, found := c.EnterContinuations[ctx]
+	if found {
+		c.fail("continuation already set!")
+	}
+
+	c.EnterContinuations[ctx] = f
+}
+
+func (c *MainPass) setExitContinuation(ctx antlr.ParserRuleContext, f func()) {
+	_, found := c.ExitContinuations[ctx]
+	if found {
+		c.fail("continuation already set!")
+	}
+
+	c.ExitContinuations[ctx] = f
+}
+
+func (c *MainPass) runEnterContinuation(ctx antlr.ParserRuleContext) {
+	f, found := c.EnterContinuations[ctx]
+	if found {
+		f()
+	}
+}
+
+func (c *MainPass) runExitContinuation(ctx antlr.ParserRuleContext) {
+	f, found := c.ExitContinuations[ctx]
+	if found {
+		f()
+	}
+}
+
+func (c *MainPass) fail(format string, a ...interface{}) {
+	c.Err = fmt.Errorf(format, a...)
+	panic(c.Err.Error())
 }

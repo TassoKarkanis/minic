@@ -1,4 +1,4 @@
-package main
+package codegen
 
 // Registers and Calling Convention
 //

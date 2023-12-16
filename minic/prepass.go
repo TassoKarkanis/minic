@@ -35,8 +35,11 @@ func (p *Prepass) ExitCompilationUnit(c *parser.CompilationUnitContext) {
 	}
 }
 
-func (p *Prepass) EnterDirectDeclaratorIdentifier(c *parser.DirectDeclaratorIdentifierContext) {
-	p.LastDeclaratorIdentifier = c.Identifier().GetText()
+func (p *Prepass) EnterDirectDeclarator(c *parser.DirectDeclaratorContext) {
+	ident := c.Identifier()
+	if ident != nil {
+		p.LastDeclaratorIdentifier = ident.GetText()
+	}
 }
 
 func (p *Prepass) EnterParameterTypeList(c *parser.ParameterTypeListContext) {

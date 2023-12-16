@@ -179,7 +179,7 @@ constantExpression
 
 declaration
     :   declarationSpecifiers initDeclaratorList ';'
-	| 	declarationSpecifiers ';'
+    |   declarationSpecifiers ';'
     |   staticAssertDeclaration
     ;
 
@@ -232,14 +232,14 @@ typeSpecifier
     |   '_Complex'
     |   '__m128'
     |   '__m128d'
-    |   '__m128i') # typeSpecifierSimple
-    |   '__extension__' '(' ('__m128' | '__m128d' | '__m128i') ')' # typeSpecifierOther
-    |   atomicTypeSpecifier # typeSpecifierOther
-    |   structOrUnionSpecifier # typeSpecifierOther
-    |   enumSpecifier # typeSpecifierOther
-    |   typedefName # typeSpecifierOther
-    |   '__typeof__' '(' constantExpression ')'  # typeSpecifierOther // GCC extension
-    |   typeSpecifier pointer  # typeSpecifierOther
+    |   '__m128i')
+    |   '__extension__' '(' ('__m128' | '__m128d' | '__m128i') ')'
+    |   atomicTypeSpecifier
+    |   structOrUnionSpecifier
+    |   enumSpecifier
+    |   typedefName
+    |   '__typeof__' '(' constantExpression ')' // GCC extension
+    |   typeSpecifier pointer
     ;
 
 structOrUnionSpecifier
@@ -327,16 +327,16 @@ declarator
     ;
 
 directDeclarator
-    :   Identifier # directDeclaratorIdentifier
-    |   '(' declarator ')' # directDeclarator2
-    |   directDeclarator '[' typeQualifierList? assignmentExpression? ']' # directDeclarator3
-    |   directDeclarator '[' 'static' typeQualifierList? assignmentExpression ']' # directDeclarator4
-    |   directDeclarator '[' typeQualifierList 'static' assignmentExpression ']' # directDeclarator5
-    |   directDeclarator '[' typeQualifierList? '*' ']' # directDeclarator6
-    |   directDeclarator '(' parameterTypeList ')' # directDeclaratorFunction
-    |   directDeclarator '(' identifierList? ')' # directDeclaratorKRFunction
-    |   Identifier ':' DigitSequence # directDeclaratorBitField
-    |   '(' typeSpecifier? pointer directDeclarator ')' # directDeclaratorFunctionPointer
+    :   Identifier
+    |   '(' declarator ')'
+    |   directDeclarator '[' typeQualifierList? assignmentExpression? ']'
+    |   directDeclarator '[' 'static' typeQualifierList? assignmentExpression ']'
+    |   directDeclarator '[' typeQualifierList 'static' assignmentExpression ']'
+    |   directDeclarator '[' typeQualifierList? '*' ']'
+    |   directDeclarator '(' parameterTypeList ')'
+    |   directDeclarator '(' identifierList? ')'
+    |   Identifier ':' DigitSequence
+    |   '(' typeSpecifier? pointer directDeclarator ')'
     ;
 
 gccDeclaratorExtension

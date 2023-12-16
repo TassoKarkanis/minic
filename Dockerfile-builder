@@ -1,9 +1,11 @@
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # install some dependencies
 # Note: to suppress interactive menu of tzdata, DEBIAN_FRONTEND must be set
 RUN apt-get update && \
     DEBIAN_FRONTEND="noninteractive" \
     apt-get install -y \
-    	antlr4 && \
+    	antlr4 \
+	golang-go \
+	&& \
     rm -rf /var/lib/apt/lists
