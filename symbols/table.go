@@ -34,7 +34,7 @@ func (t *Table) AddSymbol(name string, typ types.Type, val *codegen.Value) {
 }
 
 func (t *Table) FindSymbol(name string) (types.Type, *codegen.Value, bool) {
-	for i := len(t.scopes); i >= 0; i-- {
+	for i := len(t.scopes) - 1; i >= 0; i-- {
 		scope := t.scopes[i]
 		data, ok := scope.symbols[name]
 		if ok {

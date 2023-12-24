@@ -6,11 +6,12 @@ import (
 	"github.com/TassoKarkanis/minic/parser"
 )
 
-// void, int, float
-// int*
-// int**
-// int[3]
-// void f(int)
+// Examples:
+//   void, int, float
+//   int*
+//   int**
+//   int[3]
+//   void f(int)
 
 // Type category
 const (

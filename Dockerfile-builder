@@ -1,4 +1,8 @@
-FROM ubuntu:22.04
+###########################################################################
+# minic-builder
+###########################################################################
+
+FROM ubuntu:22.04 as minic-builder
 
 # install some dependencies
 # Note: to suppress interactive menu of tzdata, DEBIAN_FRONTEND must be set
@@ -6,6 +10,35 @@ RUN apt-get update && \
     DEBIAN_FRONTEND="noninteractive" \
     apt-get install -y \
     	antlr4 \
-	golang-go \
+	git \
+	wget \
 	&& \
     rm -rf /var/lib/apt/lists
+
+# Download and install Go
+RUN wget https://go.dev/dl/go1.19.1.linux-amd64.tar.gz && \
+tar -xf go1.19.1.linux-amd64.tar.gz
+
+# Configure Go
+ENV GOROOT=/go
+ENV GOCACHE=/root/go/cache
+ENV PATH=$GOROOT/bin:$PATH
+# Diable buildvcs flag to build on CircleCI [See https://github.com/ko-build/ko/issues/672 and ]
+ENV GOFLAGS="-buildvcs=false"
+
+
+###########################################################################
+# minic-devcontainer
+###########################################################################
+
+FROM minic-builder AS minic-devcontainer
+
+# install VS Code (code-server)
+RUN curl -fsSL https://code-server.dev/install.sh | sh
+
+# # install VS Code extensions
+# RUN code-server --install-extension redhat.vscode-yaml \
+#                 --install-extension golang.Go
+# 
+# # make git work in /w
+# RUN git config --global --add safe.directory /w

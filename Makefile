@@ -14,14 +14,6 @@ build/hello: hello/hello.asm
 	nasm -f elf64 -o build/hello.o hello/hello.asm
 	ld -o build/hello build/hello.o
 
-build/.build:
-	mkdir -p build
-	touch build/.build
-
-build/.builder: build/.build Dockerfile-builder
-	docker build -t minic-builder:latest -f Dockerfile-builder .
-	touch build/.builder
-
 parser/c_parser.go: C.g4 build/.builder
 	mkdir -p parser
 	chmod g+s parser
@@ -37,6 +29,36 @@ TESTS_DIFF := $(TESTS_C:tests/%.c=build/%.diff)
 
 # $(info $$TEST_TARGETS is [${TEST_TARGETS}])
 
+devcontainer: build/.devcontainer FORCE
+	docker kill minic-devcontainer || true
+	docker rm minic-devcontainer || true
+	docker run \
+		--name minic-devcontainer \
+		--network agmt \
+		-d \
+		-e CGO_ENABLED=0 \
+		-v `pwd`:/w \
+		-v minic-buildvol:/root/go \
+		-w /w \
+		minic-devcontainer:latest \
+		sleep infinity
+
+test: build/.builder
+	docker run \
+		-v minic-buildvol:/root/go \
+		-v `pwd`:/w \
+		-w /w \
+		-it minic-builder:latest \
+		go test -v ./minic/...
+
+shell: build/.builder
+	docker run \
+		-v minic-buildvol:/root/go \
+		-v `pwd`:/w \
+		-w /w \
+		-it minic-builder:latest \
+		bash
+
 tests: $(TESTS_DIFF)
 
 build/%.asm : tests/%.c build/minic
@@ -49,5 +71,27 @@ build/%.gcc.asm : tests/%.c
 
 build/%.diff : tests/%.asm build/%.asm
 	diff -c $< $(@:.diff=.asm) > $@
+
+build/.devcontainer: build/.build Dockerfile-builder
+	docker build \
+		-t minic-devcontainer:latest \
+		--target minic-devcontainer \
+		-f Dockerfile-builder \
+		.
+	touch build/.devcontainer
+
+build/.builder: build/.build Dockerfile-builder
+	docker build \
+		-t minic-builder:latest \
+		--target minic-builder \
+		-f Dockerfile-builder \
+		.
+	touch build/.builder
+
+build/.build:
+	mkdir -p build
+	touch build/.build
+
+FORCE:
 
 # objconv -v0 -fnasm $(@:.asm=-gcc.o) $(@:.asm=-gcc.asm)

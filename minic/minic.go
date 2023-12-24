@@ -58,8 +58,6 @@ func runMainPass(inputFile string, output io.Writer) error {
 
 func mainE(options Options, modules []string) error {
 	// open the output file
-	fmt.Printf("outputFile: %s\n", options.OutputFile)
-
 	output, err := os.Create(options.OutputFile)
 	if err != nil {
 		return err

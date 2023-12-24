@@ -27,49 +27,49 @@ func NewCodegen(out io.Writer) *Codegen {
 	return &Codegen{
 		out: out,
 		integerReg: []*Register{
-			&Register{
+			{
 				integer:   true,
 				fullName:  "rax",
 				dwordName: "eax",
 				wordName:  "ax",
 				byteName:  "al",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "rdi",
 				dwordName: "edi",
 				wordName:  "di",
 				byteName:  "dl",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "rsi",
 				dwordName: "esx",
 				wordName:  "si",
 				byteName:  "sl",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "rdx",
 				dwordName: "edx",
 				wordName:  "dx",
 				byteName:  "dl",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "rcx",
 				dwordName: "ecx",
 				wordName:  "cx",
 				byteName:  "cl",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "r8",
 				dwordName: "r8d",
 				wordName:  "r8w",
 				byteName:  "r8b",
 			},
-			&Register{
+			{
 				integer:   true,
 				fullName:  "r9",
 				dwordName: "r9d",
@@ -84,7 +84,7 @@ func NewCodegen(out io.Writer) *Codegen {
 func (c *Codegen) Close() {
 	if len(c.values) > 0 {
 		var unreleasedVal GetText
-		for key, _ := range c.values {
+		for key := range c.values {
 			unreleasedVal = key
 			break
 		}
@@ -203,7 +203,7 @@ func (c *Codegen) MoveValue(destKey, srcKey GetText) {
 
 func (c *Codegen) ReleaseValue(key GetText) {
 	if c.values[key] == nil {
-		c.fail("value to release not found: %s", key.GetText)
+		c.fail("value to release not found: %s", key.GetText())
 	}
 
 	// clear the register binding, if any

@@ -19,7 +19,7 @@ type Value struct {
 	typ      types.Type // type of value
 	storage  Storage    // how the value is stored
 	value    string     // constant, global address
-	offset   int        // typically negative, set local (stack) storage
+	offset   int        // relative to BP, typically negative
 	register *Register  // set if register storage
 }
 
@@ -28,6 +28,14 @@ func NewGlobalValue(name string, typ types.Type) *Value {
 		typ:     typ,
 		storage: GlobalStorage,
 		value:   name,
+	}
+}
+
+func NewIdentifier(name string, typ types.Type, offset int) *Value {
+	return &Value{
+		typ:     typ,
+		storage: LocalStorage,
+		offset:  offset,
 	}
 }
 

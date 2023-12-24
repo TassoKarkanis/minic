@@ -1,3 +1,4 @@
 /build
 /parser
 /tmp
+*.out.asm
