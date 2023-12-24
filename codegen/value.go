@@ -21,6 +21,7 @@ type Value struct {
 	value    string     // constant, global address
 	offset   int        // relative to BP, typically negative
 	register *Register  // set if register storage
+	dirty    bool       // value in register is more recent than at storage location
 }
 
 func NewGlobalValue(name string, typ types.Type) *Value {
@@ -44,18 +45,20 @@ func (v *Value) GetType() types.Type {
 }
 
 func (v *Value) Source() string {
-	switch v.storage {
-	case ConstantStorage:
+	useRegister := v.storage == RegisterStorage || v.register != nil
+
+	switch {
+	case v.storage == ConstantStorage:
 		return v.value
 
-	case RegisterStorage:
+	case useRegister:
 		return v.register.Name(4)
 
-	case LocalStorage:
+	case v.storage == LocalStorage:
 		// TODO: use type
 		return fmt.Sprintf("dword [rsp - %d]", -v.offset)
 
-	case GlobalStorage:
+	case v.storage == GlobalStorage:
 		return v.value
 
 	default:

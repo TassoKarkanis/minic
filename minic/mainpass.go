@@ -58,23 +58,25 @@ func NewMainPass(output io.Writer) *MainPass {
 }
 
 func (c *MainPass) EnterCompilationUnit(ctx *parser.CompilationUnitContext) {
-	c.enterf("EnterCompilationUnit", ctx.GetText())
+	c.enterf("CompilationUnit", ctx.GetText())
 }
 
 func (c *MainPass) ExitCompilationUnit(ctx *parser.CompilationUnitContext) {
-	c.exitf("")
+	e := c.exitf("")
+	defer e()
 }
 
 func (c *MainPass) EnterExternalDeclaration(ctx *parser.ExternalDeclarationContext) {
-	c.enterf("EnterExternalDeclaration", ctx.GetText())
+	c.enterf("ExternalDeclaration", ctx.GetText())
 }
 
 func (c *MainPass) ExitExternalDeclaration(ctx *parser.ExternalDeclarationContext) {
-	c.exitf("")
+	e := c.exitf("")
+	defer e()
 }
 
 func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
-	c.enterf("EnterFunctionDefinition", ctx.GetText())
+	c.enterf("FunctionDefinition", ctx.GetText())
 
 	if c.Function != nil {
 		c.fail("nested function not implemented")
@@ -137,7 +139,9 @@ func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext
 }
 
 func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
+
 	c.Symbols.PopScope()
 	c.cgen.EndStackFrame()
 	c.cgen.Close()
@@ -146,12 +150,13 @@ func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext)
 }
 
 func (c *MainPass) EnterDeclarationSpecifiers(ctx *parser.DeclarationSpecifiersContext) {
-	c.enterf("EnterDeclarationSpecifiers", ctx.GetText())
+	c.enterf("DeclarationSpecifiers", ctx.GetText())
 	c.runEnterContinuation(ctx)
 }
 
 func (c *MainPass) ExitDeclarationSpecifiers(ctx *parser.DeclarationSpecifiersContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	if ctx.DeclarationSpecifier(1) != nil {
 		c.fail("multiple declaration specifiers!")
@@ -166,12 +171,13 @@ func (c *MainPass) ExitDeclarationSpecifiers(ctx *parser.DeclarationSpecifiersCo
 }
 
 func (c *MainPass) EnterDeclarationSpecifier(ctx *parser.DeclarationSpecifierContext) {
-	c.enterf("EnterDeclarationSpecifier", ctx.GetText())
+	c.enterf("DeclarationSpecifier", ctx.GetText())
 	c.runEnterContinuation(ctx)
 }
 
 func (c *MainPass) ExitDeclarationSpecifier(ctx *parser.DeclarationSpecifierContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	typeSpec := ctx.TypeSpecifier()
 	switch {
@@ -189,12 +195,13 @@ func (c *MainPass) ExitDeclarationSpecifier(ctx *parser.DeclarationSpecifierCont
 }
 
 func (c *MainPass) EnterDeclarator(ctx *parser.DeclaratorContext) {
-	c.enterf("EnterDeclarator", "%s", ctx.GetText())
+	c.enterf("Declarator", "%s", ctx.GetText())
 	c.runEnterContinuation(ctx)
 }
 
 func (c *MainPass) ExitDeclarator(ctx *parser.DeclaratorContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	if ctx.Pointer() != nil {
 		c.fail("pointers not yet supported")
@@ -207,11 +214,12 @@ func (c *MainPass) ExitDeclarator(ctx *parser.DeclaratorContext) {
 }
 
 func (c *MainPass) EnterDirectDeclarator(ctx *parser.DirectDeclaratorContext) {
-	c.debugf("EnterDirectDeclarator(): %s\n", ctx.GetText())
+	c.enterf("DirectDeclarator", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitDirectDeclarator(ctx *parser.DirectDeclaratorContext) {
-	c.enterf("ExitDirectDeclarator", "%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	ident := ctx.Identifier()
 	directDecl := ctx.DirectDeclarator()
@@ -241,11 +249,12 @@ func (c *MainPass) ExitDirectDeclarator(ctx *parser.DirectDeclaratorContext) {
 }
 
 func (c *MainPass) EnterTypeSpecifier(ctx *parser.TypeSpecifierContext) {
-	c.enterf("EnterTypeSpecifier", "%s", ctx.GetText())
+	c.enterf("TypeSpecifier", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	cp := ctx.GetParser().(*parser.CParser)
 
@@ -261,7 +270,7 @@ func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
 
 	setBasicType := func(parserType int) {
 		typ := types.NewBasicType(parserType, cp)
-		c.debugf("  setBasicType(): %s\n", typ)
+		c.debugf("setBasicType(): %s\n", typ)
 		c.Types[ctx] = typ
 	}
 
@@ -291,15 +300,16 @@ func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
 		c.fail("type specifier not supported")
 	}
 
-	c.debugf("  result: %s\n", c.Types[ctx])
+	c.debugf("result: %s\n", c.Types[ctx])
 }
 
 func (c *MainPass) EnterParameterTypeList(ctx *parser.ParameterTypeListContext) {
-	c.enterf("EnterParameterTypeList", "%s", ctx.GetText())
+	c.enterf("ParameterTypeList", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitParameterTypeList(ctx *parser.ParameterTypeListContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	paramList := ctx.ParameterList()
 	ellipsis := ctx.Ellipsis()
@@ -315,15 +325,16 @@ func (c *MainPass) ExitParameterTypeList(ctx *parser.ParameterTypeListContext) {
 		c.fail("varargs not supported")
 	}
 
-	c.debugf("  result: %+v\n", c.Types[ctx])
+	c.debugf("result: %+v\n", c.Types[ctx])
 }
 
 func (c *MainPass) EnterParameterList(ctx *parser.ParameterListContext) {
-	c.enterf("EnterParameterList", "%s", ctx.GetText())
+	c.enterf("ParameterList", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitParameterList(ctx *parser.ParameterListContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	paramDecl := ctx.ParameterDeclaration()
 	paramList := ctx.ParameterList()
@@ -354,15 +365,16 @@ func (c *MainPass) ExitParameterList(ctx *parser.ParameterListContext) {
 		c.fail("ExitParameterList: invalid case")
 	}
 
-	c.debugf("  result: %+v\n", c.Types[ctx])
+	c.debugf("result: %+v\n", c.Types[ctx])
 }
 
 func (c *MainPass) EnterParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
-	c.enterf("EnterParameterDeclaration", "%s", ctx.GetText())
+	c.enterf("ParameterDeclaration", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	declSpec := ctx.DeclarationSpecifiers()
 	declarator := ctx.Declarator()
@@ -372,8 +384,8 @@ func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationCont
 	case declSpec != nil && declarator != nil:
 		typ := c.Types[declSpec]
 		decl := c.Declarations[declarator]
-		c.debugf("  typ: %s\n", typ)
-		c.debugf("  decl: %s\n", decl)
+		c.debugf("typ: %s\n", typ)
+		c.debugf("decl: %s\n", decl)
 
 		if decl.Type == nil {
 			c.Declarations[ctx] = Declaration{
@@ -403,25 +415,28 @@ func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationCont
 		c.fail("ExitParameterDeclaration: invalid case")
 	}
 
-	c.debugf("  result: %+v\n", c.Declarations[ctx])
+	c.debugf("result: %+v\n", c.Declarations[ctx])
 }
 
 func (c *MainPass) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
-	c.enterf("EnterCompoundStatement", "%s", ctx.GetText())
+	c.enterf("CompoundStatement", "%s", ctx.GetText())
 	c.runEnterContinuation(ctx)
 }
 
 func (c *MainPass) ExitCompoundStatement(ctx *parser.CompoundStatementContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
+
 	c.runExitContinuation(ctx)
 }
 
 func (c *MainPass) EnterJumpStatement(ctx *parser.JumpStatementContext) {
-	c.enterf("EnterJumpStatement", "%s", ctx.GetText())
+	c.enterf("JumpStatement", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitJumpStatement(ctx *parser.JumpStatementContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	switch {
 	case ctx.Return() != nil:
@@ -436,11 +451,12 @@ func (c *MainPass) ExitJumpStatement(ctx *parser.JumpStatementContext) {
 }
 
 func (c *MainPass) EnterExpression(ctx *parser.ExpressionContext) {
-	c.enterf("EnterExpression", "%s", ctx.GetText())
+	c.enterf("Expression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitExpression(ctx *parser.ExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.AssignmentExpression()
 	exp2 := ctx.Expression()
@@ -455,11 +471,12 @@ func (c *MainPass) ExitExpression(ctx *parser.ExpressionContext) {
 }
 
 func (c *MainPass) EnterAssignmentExpression(ctx *parser.AssignmentExpressionContext) {
-	c.enterf("EnterAssignmentExpression", "%s", ctx.GetText())
+	c.enterf("AssignmentExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitAssignmentExpression(ctx *parser.AssignmentExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.ConditionalExpression()
 
@@ -473,27 +490,26 @@ func (c *MainPass) ExitAssignmentExpression(ctx *parser.AssignmentExpressionCont
 }
 
 func (c *MainPass) EnterConditionalExpression(ctx *parser.ConditionalExpressionContext) {
-	c.enterf("EnterConditionalExpression", "%s", ctx.GetText())
-	c.debugf("  LogicalOrExpression: %v\n", ctx.LogicalOrExpression() != nil)
-
-	exp1 := ctx.LogicalOrExpression()
-	c.cgen.MoveValue(ctx, exp1)
+	c.enterf("ConditionalExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitConditionalExpression(ctx *parser.ConditionalExpressionContext) {
-	c.exitf("%s", ctx.GetText())
-	c.debugf("  LogicalOrExpression: %v\n", ctx.LogicalOrExpression() != nil)
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
+
+	c.debugf("LogicalOrExpression: %v\n", ctx.LogicalOrExpression() != nil)
 
 	exp1 := ctx.LogicalOrExpression()
 	c.cgen.MoveValue(ctx, exp1)
 }
 
 func (c *MainPass) EnterLogicalOrExpression(ctx *parser.LogicalOrExpressionContext) {
-	c.enterf("EnterLogicalOrExpression", "%s", ctx.GetText())
+	c.enterf("LogicalOrExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitLogicalOrExpression(ctx *parser.LogicalOrExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.LogicalAndExpression()
 	exp2 := ctx.LogicalOrExpression()
@@ -508,11 +524,12 @@ func (c *MainPass) ExitLogicalOrExpression(ctx *parser.LogicalOrExpressionContex
 }
 
 func (c *MainPass) EnterLogicalAndExpression(ctx *parser.LogicalAndExpressionContext) {
-	c.enterf("EnterLogicalAndExpression", "%s", ctx.GetText())
+	c.enterf("LogicalAndExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitLogicalAndExpression(ctx *parser.LogicalAndExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.InclusiveOrExpression()
 	exp2 := ctx.LogicalAndExpression()
@@ -527,11 +544,12 @@ func (c *MainPass) ExitLogicalAndExpression(ctx *parser.LogicalAndExpressionCont
 }
 
 func (c *MainPass) EnterInclusiveOrExpression(ctx *parser.InclusiveOrExpressionContext) {
-	c.enterf("EnterInclusiveOrExpression", "%s", ctx.GetText())
+	c.enterf("InclusiveOrExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitInclusiveOrExpression(ctx *parser.InclusiveOrExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.ExclusiveOrExpression()
 	exp2 := ctx.InclusiveOrExpression()
@@ -546,11 +564,12 @@ func (c *MainPass) ExitInclusiveOrExpression(ctx *parser.InclusiveOrExpressionCo
 }
 
 func (c *MainPass) EnterExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionContext) {
-	c.enterf("EnterExclusiveOrExpression", "%s", ctx.GetText())
+	c.enterf("ExclusiveOrExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.AndExpression()
 	exp2 := ctx.ExclusiveOrExpression()
@@ -565,11 +584,12 @@ func (c *MainPass) ExitExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionCo
 }
 
 func (c *MainPass) EnterAndExpression(ctx *parser.AndExpressionContext) {
-	c.enterf("EnterAndExpression", "%s", ctx.GetText())
+	c.enterf("AndExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitAndExpression(ctx *parser.AndExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.EqualityExpression()
 	exp2 := ctx.AndExpression()
@@ -584,11 +604,12 @@ func (c *MainPass) ExitAndExpression(ctx *parser.AndExpressionContext) {
 }
 
 func (c *MainPass) EnterEqualityExpression(ctx *parser.EqualityExpressionContext) {
-	c.enterf("EnterEqualityExpression", "%s", ctx.GetText())
+	c.enterf("EqualityExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.RelationalExpression()
 	exp2 := ctx.EqualityExpression()
@@ -603,11 +624,12 @@ func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext)
 }
 
 func (c *MainPass) EnterRelationalExpression(ctx *parser.RelationalExpressionContext) {
-	c.enterf("EnterRelationalExpression", "%s", ctx.GetText())
+	c.enterf("RelationalExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.ShiftExpression()
 	exp2 := ctx.RelationalExpression()
@@ -622,11 +644,12 @@ func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionCont
 }
 
 func (c *MainPass) EnterShiftExpression(ctx *parser.ShiftExpressionContext) {
-	c.enterf("EnterShiftExpression", "%s", ctx.GetText())
+	c.enterf("ShiftExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitShiftExpression(ctx *parser.ShiftExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.AdditiveExpression()
 	exp2 := ctx.ShiftExpression()
@@ -641,11 +664,12 @@ func (c *MainPass) ExitShiftExpression(ctx *parser.ShiftExpressionContext) {
 }
 
 func (c *MainPass) EnterAdditiveExpression(ctx *parser.AdditiveExpressionContext) {
-	c.enterf("EnterAdditiveExpression", "%s", ctx.GetText())
+	c.enterf("AdditiveExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	e1 := ctx.MultiplicativeExpression()
 	e2 := ctx.AdditiveExpression()
@@ -681,11 +705,12 @@ func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext)
 }
 
 func (c *MainPass) EnterMultiplicativeExpression(ctx *parser.MultiplicativeExpressionContext) {
-	c.enterf("EnterMultiplicativeExpression", "%s", ctx.GetText())
+	c.enterf("MultiplicativeExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.CastExpression()
 	exp2 := ctx.MultiplicativeExpression()
@@ -700,14 +725,16 @@ func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpres
 }
 
 func (c *MainPass) EnterCastExpression(ctx *parser.CastExpressionContext) {
-	c.enterf("EnterCastExpression", "%s", ctx.GetText())
+	c.enterf("CastExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitCastExpression(ctx *parser.CastExpressionContext) {
-	c.exitf("%s", ctx.GetText())
-	c.debugf("  TypeName: %v\n", ctx.TypeName() != nil)
-	c.debugf("  CastExpression: %v\n", ctx.CastExpression() != nil)
-	c.debugf("  UnaryExpression: %v\n", ctx.UnaryExpression() != nil)
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
+
+	c.debugf("TypeName: %v\n", ctx.TypeName() != nil)
+	c.debugf("CastExpression: %v\n", ctx.CastExpression() != nil)
+	c.debugf("UnaryExpression: %v\n", ctx.UnaryExpression() != nil)
 
 	exp1 := ctx.TypeName()
 	exp2 := ctx.CastExpression()
@@ -723,11 +750,12 @@ func (c *MainPass) ExitCastExpression(ctx *parser.CastExpressionContext) {
 }
 
 func (c *MainPass) EnterUnaryExpression(ctx *parser.UnaryExpressionContext) {
-	c.enterf("EnterUnaryExpression", "%s", ctx.GetText())
+	c.enterf("UnaryExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.PostfixExpression()
 
@@ -741,11 +769,12 @@ func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
 }
 
 func (c *MainPass) EnterPostfixExpression(ctx *parser.PostfixExpressionContext) {
-	c.enterf("EnterPostfixExpression", "%s", ctx.GetText())
+	c.enterf("PostfixExpression", "%s", ctx.GetText())
 }
 
 func (c *MainPass) ExitPostfixExpression(ctx *parser.PostfixExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	exp1 := ctx.PrimaryExpression()
 
@@ -759,15 +788,16 @@ func (c *MainPass) ExitPostfixExpression(ctx *parser.PostfixExpressionContext) {
 }
 
 func (c *MainPass) EnterPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
-	c.enterf("EnterPrimaryExpression", "%s", ctx.GetText())
+	c.enterf("PrimaryExpression", "%s", ctx.GetText())
 	tok := ctx.GetStart()
-	c.debugf("  start token index: %d\n", tok.GetTokenIndex())
-	c.debugf("  start token type: %d\n", tok.GetTokenType())
-	c.debugf("  start token channel: %d\n", tok.GetChannel())
+	c.debugf("start token index: %d\n", tok.GetTokenIndex())
+	c.debugf("start token type: %d\n", tok.GetTokenType())
+	c.debugf("start token channel: %d\n", tok.GetChannel())
 }
 
 func (c *MainPass) ExitPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
-	c.exitf("%s", ctx.GetText())
+	e := c.exitf("%s", ctx.GetText())
+	defer e()
 
 	cp := ctx.GetParser().(*parser.CParser)
 	tok := ctx.GetStart()
@@ -775,7 +805,7 @@ func (c *MainPass) ExitPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
 	switch {
 	case tok.GetTokenType() == parser.CLexerConstant:
 		typ := types.NewBasicType(parser.CParserInt, cp) // TODO: type
-		c.cgen.CreateIntValue(ctx, typ, tok.GetText())
+		c.cgen.CreateIntLiteralValue(ctx, typ, tok.GetText())
 
 	case ctx.Identifier() != nil:
 		// An identifier being evaluated.  Look up the symbol.
@@ -786,12 +816,12 @@ func (c *MainPass) ExitPrimaryExpression(ctx *parser.PrimaryExpressionContext) {
 		}
 
 		// it should have a value
-		if value != nil {
+		if value == nil {
 			c.fail("symbol has no value: %s", name)
 		}
 
 		// forward the value
-		c.cgen.MoveValue(ctx, ctx.Identifier())
+		c.cgen.CreateValue(ctx, value)
 
 	default:
 		panic("unhandled case!")
@@ -837,7 +867,7 @@ func (c *MainPass) fail(format string, a ...interface{}) {
 
 func (c *MainPass) enterf(stackStr string, format string, a ...interface{}) {
 	// log the message
-	msg := stackStr + "()"
+	msg := "Enter" + stackStr + "()"
 	if format != "" {
 		msg += ": " + fmt.Sprintf(format, a...)
 	}
@@ -847,17 +877,25 @@ func (c *MainPass) enterf(stackStr string, format string, a ...interface{}) {
 	c.enterStack = append(c.enterStack, stackStr)
 }
 
-func (c *MainPass) exitf(format string, a ...interface{}) {
-	// pop the stack string
+func (c *MainPass) exitf(format string, a ...interface{}) func() {
+	// pop the stack
 	stackStr := c.enterStack[len(c.enterStack)-1]
 	c.enterStack = c.enterStack[0 : len(c.enterStack)-1]
 
-	// log the message
-	msg := stackStr + "()"
+	// print the message
+	msg := "Exit" + stackStr + "()"
 	if format != "" {
 		msg += ": " + fmt.Sprintf(format, a...)
 	}
 	c.debugf(msg)
+
+	// put it back on the stack (to indent log statements in the current function)
+	c.enterStack = append(c.enterStack, stackStr)
+
+	// return a function that pops the stack
+	return func() {
+		c.enterStack = c.enterStack[0 : len(c.enterStack)-1]
+	}
 }
 
 func (c *MainPass) debugf(format string, a ...interface{}) {

@@ -15,70 +15,87 @@ type Scope struct {
 	offset int // negative, offset of current end of scope
 }
 
+const RAX = "rax"
+const RDI = "rdi"
+const RSI = "rsi"
+const RDX = "rdx"
+const RCX = "rcx"
+const R8 = "r8"
+const R9 = "r9"
+
+var registerAllocationOrder = [...]string{
+	RDI, RSI, RDX, RCX, R8, R9,
+}
+
 type Codegen struct {
 	out        io.Writer
-	integerReg []*Register // rax is first
+	integerReg map[string]*Register
 	values     map[GetText]*Value
 	funcName   string // name of current function
 	scopes     []*Scope
 }
 
 func NewCodegen(out io.Writer) *Codegen {
-	return &Codegen{
-		out: out,
-		integerReg: []*Register{
-			{
-				integer:   true,
-				fullName:  "rax",
-				dwordName: "eax",
-				wordName:  "ax",
-				byteName:  "al",
-			},
-			{
-				integer:   true,
-				fullName:  "rdi",
-				dwordName: "edi",
-				wordName:  "di",
-				byteName:  "dl",
-			},
-			{
-				integer:   true,
-				fullName:  "rsi",
-				dwordName: "esx",
-				wordName:  "si",
-				byteName:  "sl",
-			},
-			{
-				integer:   true,
-				fullName:  "rdx",
-				dwordName: "edx",
-				wordName:  "dx",
-				byteName:  "dl",
-			},
-			{
-				integer:   true,
-				fullName:  "rcx",
-				dwordName: "ecx",
-				wordName:  "cx",
-				byteName:  "cl",
-			},
-			{
-				integer:   true,
-				fullName:  "r8",
-				dwordName: "r8d",
-				wordName:  "r8w",
-				byteName:  "r8b",
-			},
-			{
-				integer:   true,
-				fullName:  "r9",
-				dwordName: "r9d",
-				wordName:  "r9w",
-				byteName:  "r9b",
-			},
+	// make the map of registers
+	registers := map[string]*Register{
+		RAX: {
+			integer:   true,
+			fullName:  "rax",
+			dwordName: "eax",
+			wordName:  "ax",
+			byteName:  "al",
 		},
-		values: make(map[GetText]*Value),
+		RDI: {
+			integer:   true,
+			fullName:  "rdi",
+			dwordName: "edi",
+			wordName:  "di",
+			byteName:  "dl",
+		},
+		RSI: {
+			integer:   true,
+			fullName:  "rsi",
+			dwordName: "esx",
+			wordName:  "si",
+			byteName:  "sl",
+		},
+		RDX: {
+			integer:   true,
+			fullName:  "rdx",
+			dwordName: "edx",
+			wordName:  "dx",
+			byteName:  "dl",
+		},
+		RCX: {
+			integer:   true,
+			fullName:  "rcx",
+			dwordName: "ecx",
+			wordName:  "cx",
+			byteName:  "cl",
+		},
+		R8: {
+			integer:   true,
+			fullName:  "r8",
+			dwordName: "r8d",
+			wordName:  "r8w",
+			byteName:  "r8b",
+		},
+		R9: {
+			integer:   true,
+			fullName:  "r9",
+			dwordName: "r9d",
+			wordName:  "r9w",
+			byteName:  "r9b",
+		},
 	}
+
+	c := &Codegen{
+		out:        out,
+		values:     make(map[GetText]*Value),
+		integerReg: registers,
+	}
+
+	return c
 }
 
 func (c *Codegen) Close() {
@@ -109,13 +126,13 @@ func (c *Codegen) StartStackFrame(name string, params []types.Type) []*Value {
 
 	// store the name
 	c.funcName = name
+	fmt.Fprintf(c.out, "%s:\n", c.funcName)
 
 	// create the curent scope
 	scope := &Scope{}
 	c.scopes = append(c.scopes, scope)
 
 	// allocate values for the parameters
-	names := []string{"edi", "esi", "edx", "ecx", "r8d", "r9d"}
 	var values []*Value
 	for i, typ := range params {
 		offset := scope.offset - 4 // TODO: based on type
@@ -123,14 +140,13 @@ func (c *Codegen) StartStackFrame(name string, params []types.Type) []*Value {
 
 		// create the value
 		val := &Value{
-			typ:     typ,
-			storage: LocalStorage,
-			offset:  offset,
+			typ:      typ,
+			storage:  LocalStorage,
+			offset:   offset,
+			register: c.integerReg[registerAllocationOrder[i]],
+			dirty:    true,
 		}
 		values = append(values, val)
-
-		// store the value to the stack
-		fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), names[i])
 	}
 
 	return values
@@ -169,7 +185,7 @@ func (c *Codegen) EndScope() {
 	c.scopes = c.scopes[0 : len(c.scopes)-1]
 }
 
-func (c *Codegen) CreateIntValue(key GetText, typ types.Type, value string) *Value {
+func (c *Codegen) CreateIntLiteralValue(key GetText, typ types.Type, value string) *Value {
 	val := &Value{
 		typ:     typ,
 		storage: ConstantStorage,
@@ -178,6 +194,14 @@ func (c *Codegen) CreateIntValue(key GetText, typ types.Type, value string) *Val
 
 	c.setValue(key, val)
 	return val
+}
+
+func (c *Codegen) CreateValue(key GetText, val *Value) {
+	if c.values[key] != nil {
+		c.fail("CreateValue(): key(%s) already exists", key.GetText())
+	}
+
+	c.values[key] = val
 }
 
 func (c *Codegen) GetValue(key GetText) *Value {
@@ -221,9 +245,8 @@ func (c *Codegen) Add(key GetText, v1, v2 *Value) {
 	val := c.allocateLocalStorage(v1.typ)
 
 	// TODO: use proper register size
-	fmt.Fprintf(c.out, "\tmov eax, %s\n", v1.Source())
-	fmt.Fprintf(c.out, "\tadd eax, %s\n", v2.Source())
-	fmt.Fprintf(c.out, "\tmov %s, eax\n", val.Source())
+	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
+	fmt.Fprintf(c.out, "\tadd %s, %s\n", val.Source(), v2.Source())
 
 	c.setValue(key, val)
 }
@@ -232,9 +255,8 @@ func (c *Codegen) Subtract(key GetText, v1, v2 *Value) {
 	val := c.allocateLocalStorage(v1.typ)
 
 	// TODO: use proper register size
-	fmt.Fprintf(c.out, "\tmov eax, %s\n", v1.Source())
-	fmt.Fprintf(c.out, "\tsub eax, %s\n", v2.Source())
-	fmt.Fprintf(c.out, "\tmov %s, eax\n", val.Source())
+	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
+	fmt.Fprintf(c.out, "\tsub %s, %s\n", val.Source(), v2.Source())
 
 	c.setValue(key, val)
 }
@@ -259,15 +281,34 @@ func (c *Codegen) setValue(key GetText, val *Value) {
 	c.values[key] = val
 }
 
+func (c *Codegen) allocateRegister() *Register {
+	for _, regName := range registerAllocationOrder {
+		reg := c.integerReg[regName]
+		if reg.binding == nil {
+			return reg
+		}
+	}
+
+	return nil
+}
+
 func (c *Codegen) allocateLocalStorage(typ types.Type) *Value {
 	scope := c.scope()
 	scope.offset -= 4 // TODO: proper type
 
+	// allocate a register
+	reg := c.allocateRegister()
+
 	val := &Value{
-		typ:     typ,
-		storage: LocalStorage,
-		offset:  scope.offset,
+		typ:      typ,
+		storage:  LocalStorage,
+		offset:   scope.offset,
+		register: c.allocateRegister(),
 	}
+
+	// bind the register to the value
+	val.register = reg
+	reg.binding = val
 
 	return val
 }

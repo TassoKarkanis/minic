@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -10,49 +9,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMinic(t *testing.T) {
+func TestEmptyFunction(t *testing.T) {
+	runTest(t, "empty-function")
+}
+
+func TestReturnOne(t *testing.T) {
+	runTest(t, "return-one")
+}
+
+func TestAdd(t *testing.T) {
+	runTest(t, "add")
+}
+
+func TestReturnArg(t *testing.T) {
+	runTest(t, "return-arg")
+}
+
+func TestTypes(t *testing.T) {
+	runTest(t, "types")
+}
+
+func runTest(t *testing.T, testName string) {
 	r := require.New(t)
 	log.SetLevel(log.DebugLevel)
 
-	// find the paths of all input C files
-	paths, err := filepath.Glob(filepath.Join("testdata", "*.c"))
+	// make the output filename
+	dir := "testdata"
+	inputFile := filepath.Join(dir, testName+".c")
+	outputFile := filepath.Join(dir, testName+".out.asm")
+
+	// call the compiler
+	opts := Options{
+		OutputFile:  outputFile,
+		CompileOnly: true,
+		CodegenOnly: true,
+	}
+	err := mainE(opts, []string{inputFile})
 	r.NoError(err)
 
-	// generate code for each file
-	for _, path := range paths {
-		dir, inputFilename := filepath.Split(path)
-		testName := inputFilename[:len(inputFilename)-len(filepath.Ext(path))]
+	// read the expected file
+	expectedFilename := filepath.Join(dir, testName+".asm")
+	expected, err := os.ReadFile(expectedFilename)
+	r.NoError(err)
 
-		fmt.Printf("testName: %s\n", testName)
-		if testName != "return-arg" {
-			continue
-		}
+	// compare the generated output with the expected
+	actual, err := os.ReadFile(outputFile)
+	r.NoError(err)
 
-		t.Run(testName, func(t *testing.T) {
-			// make the output filename
-			outputFile := filepath.Join(dir, testName+".out.asm")
-
-			// call the compiler
-			opts := Options{
-				OutputFile:  outputFile,
-				CompileOnly: true,
-				CodegenOnly: true,
-			}
-			err := mainE(opts, []string{path})
-			r.NoError(err)
-
-			// read the expected file
-			expectedFilename := filepath.Join(dir, testName+".asm")
-			expected, err := os.ReadFile(expectedFilename)
-			r.NoError(err)
-
-			// compare the generated output with the expected
-			actual, err := os.ReadFile(outputFile)
-			r.NoError(err)
-
-			if string(actual) != string(expected) {
-				r.Fail("result not as expected")
-			}
-		})
+	if string(actual) != string(expected) {
+		r.Fail("result not as expected")
 	}
+
 }

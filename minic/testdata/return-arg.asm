@@ -4,8 +4,8 @@ section .text
 	global f
 
 f:
-	mov eax, 1
-	jmp blah.end
-blah.end:
+	mov eax, edi
+	jmp f.end
+f.end:
 	ret
 

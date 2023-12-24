@@ -5,7 +5,7 @@ section .text
 
 f:
 	mov eax, 1
-	jmp blah.end
-blah.end:
+	jmp f.end
+f.end:
 	ret
 

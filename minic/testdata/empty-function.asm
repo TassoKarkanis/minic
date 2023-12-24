@@ -3,7 +3,7 @@ section .data
 section .text
 	global f
 
-	mov dword [rsp - 4], edi
+f:
 f.end:
 	ret
 
