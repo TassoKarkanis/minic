@@ -13,13 +13,24 @@
                 "build/minic",
                 "./minic"
             ],
-            "group": "build",
+            "group": {
+                "kind": "build",
+                "isDefault": "true"
+            },
             "presentation": {
-                // Reveal the output only if unrecognized errors occur.
-                "reveal": "silent"
+                "reveal": "always"
             },
             // Use the standard MS compiler pattern to detect errors, warnings and infos
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "presentation": {
+                "reveal": "always"
+            }
         }
     ]
 }

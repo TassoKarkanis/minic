@@ -1,22 +1,90 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"github.com/TassoKarkanis/minic/parser"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
-	"github.com/spf13/cobra"
 )
 
-type Options struct {
-	OutputFile  string
-	CompileOnly bool
-	CodegenOnly bool
+type MiniC struct {
 }
 
-func runPrepass(inputFile string, output io.Writer) error {
+func NewMiniC() *MiniC {
+	return &MiniC{}
+}
+
+// Compile a .c file to .asm
+func (m *MiniC) CompileFile(inputFile string, outputFile string) (err error) {
+	// open the output file
+	output, err := os.Create(outputFile)
+	if err != nil {
+		return
+	}
+
+	// recover panics and return the error
+	defer func() {
+		obj := recover()
+		if obj != nil {
+			err = fmt.Errorf("%s", obj.(string))
+			output.Close()
+		}
+	}()
+
+	// run the prepass
+	err = m.runPrepass(inputFile, output)
+	if err != nil {
+		output.Close()
+		return
+	}
+
+	fmt.Fprintf(output, "\n")
+
+	// run the main pass
+	err = m.runMainPass(inputFile, output)
+	if err != nil {
+		output.Close()
+		return
+	}
+
+	// close the file
+	err = output.Close()
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (m *MiniC) AssembleFile(inputFile string, outputFile string) error {
+	cmd := exec.Command("nasm", "-f", "elf64", "-o", outputFile, inputFile)
+	err := cmd.Run()
+	return err
+}
+
+func (m *MiniC) Link(inputFiles []string, output string) error {
+	// link with gcc
+	args := []string{"-o", output}
+	args = append(args, inputFiles...)
+	cmd := exec.Command("gcc", args...)
+	stdout := &bytes.Buffer{}
+	stderr := &bytes.Buffer{}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	err := cmd.Run()
+
+	// output stdout and stderr
+	fmt.Print(stdout.String())
+	fmt.Print(stderr.String())
+
+	return err
+}
+
+func (m *MiniC) runPrepass(inputFile string, output io.Writer) error {
 	// setup the input
 	is, err := antlr.NewFileStream(inputFile)
 	if err != nil {
@@ -36,7 +104,7 @@ func runPrepass(inputFile string, output io.Writer) error {
 	return nil
 }
 
-func runMainPass(inputFile string, output io.Writer) error {
+func (m *MiniC) runMainPass(inputFile string, output io.Writer) error {
 	// setup the input
 	is, err := antlr.NewFileStream(inputFile)
 	if err != nil {
@@ -54,71 +122,4 @@ func runMainPass(inputFile string, output io.Writer) error {
 	codegen := NewMainPass(output)
 	antlr.ParseTreeWalkerDefault.Walk(codegen, p.CompilationUnit())
 	return nil
-}
-
-func mainE(options Options, modules []string) error {
-	// open the output file
-	output, err := os.Create(options.OutputFile)
-	if err != nil {
-		return err
-	}
-
-	for _, module := range modules {
-		err = runPrepass(module, output)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(output, "\n")
-
-		err = runMainPass(module, output)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = output.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func main() {
-	options := Options{}
-
-	cobraCmd := &cobra.Command{
-		Use:  "minic module.c [module1.c ...] -o program",
-		Args: cobra.MinimumNArgs(1),
-		RunE: func(command *cobra.Command, args []string) error {
-			return mainE(options, args)
-		},
-	}
-
-	flags := cobraCmd.Flags()
-
-	flags.BoolVarP(
-		&options.CompileOnly,
-		"compile-only",
-		"c",
-		false,
-		"compile only and don't run linker")
-	flags.StringVarP(
-		&options.OutputFile,
-		"output",
-		"o",
-		"a.out",
-		"output to this file")
-	flags.BoolVarP(
-		&options.CodegenOnly,
-		"codegen-only",
-		"S",
-		false,
-		"generate code only and don't assemble or run linker")
-
-	err := cobraCmd.Execute()
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		os.Exit(1)
-	}
 }

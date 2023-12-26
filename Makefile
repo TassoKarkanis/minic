@@ -29,6 +29,11 @@ TESTS_DIFF := $(TESTS_C:tests/%.c=build/%.diff)
 
 # $(info $$TEST_TARGETS is [${TEST_TARGETS}])
 
+clean:
+	rm -f minic/testdata/*.out.asm || true
+	rm -f minic/testdata/*.o || true
+	rm -f minic/testdata/*.out || true
+
 devcontainer: build/.devcontainer FORCE
 	docker kill minic-devcontainer || true
 	docker rm minic-devcontainer || true
@@ -72,19 +77,19 @@ build/%.gcc.asm : tests/%.c
 build/%.diff : tests/%.asm build/%.asm
 	diff -c $< $(@:.diff=.asm) > $@
 
-build/.devcontainer: build/.build Dockerfile-builder
+build/.devcontainer: build/.build Dockerfile
 	docker build \
 		-t minic-devcontainer:latest \
 		--target minic-devcontainer \
-		-f Dockerfile-builder \
+		-f Dockerfile \
 		.
 	touch build/.devcontainer
 
-build/.builder: build/.build Dockerfile-builder
+build/.builder: build/.build Dockerfile
 	docker build \
 		-t minic-builder:latest \
 		--target minic-builder \
-		-f Dockerfile-builder \
+		-f Dockerfile \
 		.
 	touch build/.builder
 

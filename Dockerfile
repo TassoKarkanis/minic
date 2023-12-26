@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.3.1
+
 ###########################################################################
 # minic-builder
 ###########################################################################
@@ -6,14 +8,17 @@ FROM ubuntu:22.04 as minic-builder
 
 # install some dependencies
 # Note: to suppress interactive menu of tzdata, DEBIAN_FRONTEND must be set
-RUN apt-get update && \
-    DEBIAN_FRONTEND="noninteractive" \
+RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked \
+    --mount=target=/var/cache/apt,type=cache,sharing=locked \
+    rm -f /etc/apt/apt.conf.d/docker-clean && \
+    apt-get update && \
     apt-get install -y \
-    	antlr4 \
-	git \
-	wget \
-	&& \
-    rm -rf /var/lib/apt/lists
+		antlr4 \
+		gcc \
+		git \
+		make \
+		nasm \
+		wget
 
 # Download and install Go
 RUN wget https://go.dev/dl/go1.19.1.linux-amd64.tar.gz && \
