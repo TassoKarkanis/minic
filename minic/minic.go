@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -63,6 +62,8 @@ func (m *MiniC) CompileFile(inputFile string, outputFile string) (err error) {
 
 func (m *MiniC) AssembleFile(inputFile string, outputFile string) error {
 	cmd := exec.Command("nasm", "-f", "elf64", "-o", outputFile, inputFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	err := cmd.Run()
 	return err
 }
@@ -72,15 +73,9 @@ func (m *MiniC) Link(inputFiles []string, output string) error {
 	args := []string{"-o", output}
 	args = append(args, inputFiles...)
 	cmd := exec.Command("gcc", args...)
-	stdout := &bytes.Buffer{}
-	stderr := &bytes.Buffer{}
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 	err := cmd.Run()
-
-	// output stdout and stderr
-	fmt.Print(stdout.String())
-	fmt.Print(stderr.String())
 
 	return err
 }

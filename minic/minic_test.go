@@ -24,12 +24,16 @@ func TestAdd(t *testing.T) {
 	runTest(t, "add")
 }
 
-// func TestAddMany(t *testing.T) {
-// 	runTest(t, "add-many")
-// }
+func TestAddMany(t *testing.T) {
+	runTest(t, "add-many")
+}
 
 func TestReturnArg(t *testing.T) {
 	runTest(t, "return-arg")
+}
+
+func TestSub(t *testing.T) {
+	runTest(t, "sub")
 }
 
 func runTest(t *testing.T, name string) {

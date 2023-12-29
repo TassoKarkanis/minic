@@ -11,93 +11,29 @@ type GetText interface {
 	GetText() string
 }
 
-type Scope struct {
-	offset int // negative, offset of current end of scope
-}
-
-const RAX = "rax"
-const RDI = "rdi"
-const RSI = "rsi"
-const RDX = "rdx"
-const RCX = "rcx"
-const R8 = "r8"
-const R9 = "r9"
-
-var registerAllocationOrder = [...]string{
-	RDI, RSI, RDX, RCX, R8, R9,
-}
-
+// Used to generate code for each C function.
 type Codegen struct {
 	out        io.Writer
 	integerReg map[string]*Register
 	values     map[GetText]*Value
 	funcName   string // name of current function
-	scopes     []*Scope
+	stack      *Stack // tracks allocate stack space
 }
 
+// NewCodegen returns a new generate with a writer for the assembly code.
 func NewCodegen(out io.Writer) *Codegen {
-	// make the map of registers
-	registers := map[string]*Register{
-		RAX: {
-			integer:   true,
-			fullName:  "rax",
-			dwordName: "eax",
-			wordName:  "ax",
-			byteName:  "al",
-		},
-		RDI: {
-			integer:   true,
-			fullName:  "rdi",
-			dwordName: "edi",
-			wordName:  "di",
-			byteName:  "dl",
-		},
-		RSI: {
-			integer:   true,
-			fullName:  "rsi",
-			dwordName: "esx",
-			wordName:  "si",
-			byteName:  "sl",
-		},
-		RDX: {
-			integer:   true,
-			fullName:  "rdx",
-			dwordName: "edx",
-			wordName:  "dx",
-			byteName:  "dl",
-		},
-		RCX: {
-			integer:   true,
-			fullName:  "rcx",
-			dwordName: "ecx",
-			wordName:  "cx",
-			byteName:  "cl",
-		},
-		R8: {
-			integer:   true,
-			fullName:  "r8",
-			dwordName: "r8d",
-			wordName:  "r8w",
-			byteName:  "r8b",
-		},
-		R9: {
-			integer:   true,
-			fullName:  "r9",
-			dwordName: "r9d",
-			wordName:  "r9w",
-			byteName:  "r9b",
-		},
-	}
 
 	c := &Codegen{
 		out:        out,
+		integerReg: AllocateIntegerRegisters(),
 		values:     make(map[GetText]*Value),
-		integerReg: registers,
+		stack:      NewStack(),
 	}
 
 	return c
 }
 
+// Close checks that all values have been released.
 func (c *Codegen) Close() {
 	if len(c.values) > 0 {
 		var unreleasedVal GetText
@@ -107,18 +43,10 @@ func (c *Codegen) Close() {
 		}
 		c.fail("unreleased value: %s", unreleasedVal)
 	}
-
-	if len(c.scopes) != 0 {
-		c.fail("must close scopes and stack frame")
-	}
 }
 
+// StartStackFrame writes the function program and creates values for the parameters.
 func (c *Codegen) StartStackFrame(name string, paramNames []string, paramTypes []types.Type) []*Value {
-	// we don't handle nested functions
-	if len(c.scopes) > 0 {
-		c.fail("cannot handle nested scopes!")
-	}
-
 	// we can only handle parameters in registers for now
 	if len(paramNames) > 6 {
 		c.fail("cannot handle more than 6 parameters!")
@@ -128,69 +56,53 @@ func (c *Codegen) StartStackFrame(name string, paramNames []string, paramTypes [
 	c.funcName = name
 	fmt.Fprintf(c.out, "%s:\n", c.funcName)
 
-	// create the curent scope
-	scope := &Scope{}
-	c.scopes = append(c.scopes, scope)
-
 	// allocate values for the parameters
 	var values []*Value
 	for i, typ := range paramTypes {
-		offset := scope.offset - 4 // TODO: based on type
-		scope.offset = offset
+		offset := c.stack.Alloc4() // TODO: based on type
 
 		// create the value
-		val := &Value{
-			typ:      typ,
-			storage:  LocalStorage,
-			offset:   offset,
-			register: c.integerReg[registerAllocationOrder[i]],
-			dirty:    true,
-		}
+		val := NewLocalValue(typ, offset)
+		c.bind(val, c.integerReg[integerParameterOrder[i]], true)
 		values = append(values, val)
 
 		fmt.Fprintf(c.out, "\t; param %s %s -> %s\n", typ.String(), paramNames[i], val.register.Name(4)) // TODO
 	}
 
+	// store the callee-save register
+	for _, name := range integerRegisterAllocationOrder {
+		reg := c.integerReg[name]
+		if !reg.callerSave {
+			fmt.Fprintf(c.out, "\tpush %s\n", reg.fullName)
+		}
+	}
+
 	return values
 }
 
+// EndStackFrame writes the function epilogue.
 func (c *Codegen) EndStackFrame() {
-	// scopes should be terminated
-	if len(c.scopes) != 1 {
-		c.fail("ending stack frame with open scope")
-	}
-
 	// write epilogue
 	fmt.Fprintf(c.out, "%s:\n", c.endFrameLabel())
+
+	// restore the caller-save registers
+	for i := len(integerRegisterAllocationOrder) - 1; i >= 0; i-- {
+		name := integerRegisterAllocationOrder[i]
+		reg := c.integerReg[name]
+		if !reg.callerSave {
+			fmt.Fprintf(c.out, "\tpop %s\n", reg.fullName)
+		}
+	}
+
 	fmt.Fprintf(c.out, "\tret\n\n")
-
-	c.scopes = nil
 }
 
-func (c *Codegen) StartScope() {
-	if len(c.scopes) == 0 {
-		c.fail("no stack frame started")
-	}
-
-	// push a scope
-	scope := &Scope{
-		offset: c.scopes[len(c.scopes)-1].offset,
-	}
-	c.scopes = append(c.scopes, scope)
-}
-
-func (c *Codegen) EndScope() {
-	if len(c.scopes) == 1 {
-		c.fail("cannot end last scope")
-	}
-
-	c.scopes = c.scopes[0 : len(c.scopes)-1]
-}
-
+// CreateIntLiteralValue creates a value from an integer literal, registered
+// to the given key.
 func (c *Codegen) CreateIntLiteralValue(key GetText, typ types.Type, value string) *Value {
 	val := &Value{
 		typ:     typ,
-		storage: ConstantStorage,
+		backing: ConstantBacking,
 		value:   value,
 	}
 
@@ -198,6 +110,7 @@ func (c *Codegen) CreateIntLiteralValue(key GetText, typ types.Type, value strin
 	return val
 }
 
+// CreateValue registers a value against a key.
 func (c *Codegen) CreateValue(key GetText, val *Value) {
 	if c.values[key] != nil {
 		c.fail("CreateValue(): key(%s) already exists", key.GetText())
@@ -206,6 +119,7 @@ func (c *Codegen) CreateValue(key GetText, val *Value) {
 	c.values[key] = val
 }
 
+// GetValue returns the value associated with the key.
 func (c *Codegen) GetValue(key GetText) *Value {
 	val := c.values[key]
 	if val == nil {
@@ -214,6 +128,7 @@ func (c *Codegen) GetValue(key GetText) *Value {
 	return val
 }
 
+// MoveValue reregisters a value with a new key.
 func (c *Codegen) MoveValue(destKey, srcKey GetText) {
 	if c.values[destKey] != nil {
 		c.fail("MoveValue(): destkey(%s) already exists", destKey.GetText())
@@ -227,6 +142,7 @@ func (c *Codegen) MoveValue(destKey, srcKey GetText) {
 	delete(c.values, srcKey)
 }
 
+// ReleaseValue unregisters a value and unbinds the associated register if necessary.
 func (c *Codegen) ReleaseValue(key GetText) {
 	if c.values[key] == nil {
 		c.fail("value to release not found: %s", key.GetText())
@@ -243,8 +159,9 @@ func (c *Codegen) ReleaseValue(key GetText) {
 	delete(c.values, key)
 }
 
+// Add generates code for the sum of two values and registers the result under the given key.
 func (c *Codegen) Add(key GetText, v1, v2 *Value) {
-	val := c.allocateLocalStorage(v1.typ)
+	val := c.allocateTransientValue(v1.typ)
 
 	// TODO: use proper register size
 	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
@@ -253,8 +170,9 @@ func (c *Codegen) Add(key GetText, v1, v2 *Value) {
 	c.setValue(key, val)
 }
 
+// Subtract geneates code for the difference of two values and registers the result under the given key.
 func (c *Codegen) Subtract(key GetText, v1, v2 *Value) {
-	val := c.allocateLocalStorage(v1.typ)
+	val := c.allocateTransientValue(v1.typ)
 
 	// TODO: use proper register size
 	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
@@ -263,14 +181,30 @@ func (c *Codegen) Subtract(key GetText, v1, v2 *Value) {
 	c.setValue(key, val)
 }
 
-// Return a value from a function
+// ReturnValue generates code to return a value from the function.
 func (c *Codegen) ReturnValue(key GetText) {
+	// look up the value
 	val := c.GetValue(key)
-	fmt.Fprintf(c.out, "\tmov eax, %s\n", val.Source())
+
+	// grab the rax register
+	rax := c.integerReg[RAX]
+
+	if val.register == rax {
+		// the value is already in RAX, nothing to do
+	} else {
+		if rax.binding != nil {
+			c.fail("rax bound during return")
+		}
+
+		// move the value to rax
+		fmt.Fprintf(c.out, "\tmov %s, %s\n", rax.dwordName, val.Source())
+	}
+
+	// jmp to the epilogue
 	c.Return()
 }
 
-// Return void from a function
+// Return generates code to return nothing from the function.
 func (c *Codegen) Return() {
 	fmt.Fprintf(c.out, "\tjmp %s\n", c.endFrameLabel())
 }
@@ -284,43 +218,36 @@ func (c *Codegen) setValue(key GetText, val *Value) {
 }
 
 func (c *Codegen) allocateRegister() *Register {
-	for _, regName := range registerAllocationOrder {
+	for _, regName := range integerRegisterAllocationOrder {
 		reg := c.integerReg[regName]
 		if reg.binding == nil {
 			return reg
 		}
 	}
 
+	c.fail("no integer register found")
+
 	return nil
 }
 
-func (c *Codegen) allocateLocalStorage(typ types.Type) *Value {
-	scope := c.scope()
-	scope.offset -= 4 // TODO: proper type
-
+func (c *Codegen) allocateTransientValue(typ types.Type) *Value {
 	// allocate a register
 	reg := c.allocateRegister()
 
-	val := &Value{
-		typ:      typ,
-		storage:  LocalStorage,
-		offset:   scope.offset,
-		register: c.allocateRegister(),
-	}
+	// allocate a stack value
+	offset := c.stack.Alloc4() // TODO: proper size
+	val := NewLocalValue(typ, offset)
 
-	// bind the register to the value
-	val.register = reg
-	reg.binding = val
+	// bind the register to the value (we assume the register will be written)
+	c.bind(val, reg, true)
 
 	return val
 }
 
-func (c *Codegen) scope() *Scope {
-	if len(c.scopes) == 0 {
-		c.fail("no scopes!")
-	}
-
-	return c.scopes[len(c.scopes)-1]
+func (c *Codegen) bind(val *Value, reg *Register, dirty bool) {
+	val.register = reg
+	val.dirty = dirty
+	reg.binding = val
 }
 
 func (c *Codegen) endFrameLabel() string {

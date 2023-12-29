@@ -235,8 +235,8 @@ func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext)
 	e := c.exitf("%s", ctx.GetText())
 	defer e()
 
-	e1 := ctx.MultiplicativeExpression()
-	e2 := ctx.AdditiveExpression()
+	e1 := ctx.AdditiveExpression()
+	e2 := ctx.MultiplicativeExpression()
 	plus := ctx.Plus()
 	minus := ctx.Minus()
 
@@ -246,8 +246,8 @@ func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext)
 	c.debugf("minus: %v\n", minus)
 
 	switch {
-	case e1 != nil && e2 == nil:
-		c.cgen.MoveValue(ctx, e1)
+	case e1 == nil && e2 != nil:
+		c.cgen.MoveValue(ctx, e2)
 
 	case e1 != nil && e2 != nil && plus != nil:
 		v1 := c.cgen.GetValue(e1)

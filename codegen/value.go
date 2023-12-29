@@ -6,20 +6,20 @@ import (
 	"github.com/TassoKarkanis/minic/types"
 )
 
-type Storage int
+// Backup storage for a Value when not in a register.
+type Backing int
 
 const (
-	ConstantStorage = iota
-	RegisterStorage
-	LocalStorage
-	GlobalStorage
+	ConstantBacking Backing = iota // value is a constant
+	GlobalBacking                  // value refers to a global variable
+	LocalBacking                   // value refers to a parameter or automatic variable
 )
 
 type Value struct {
 	typ      types.Type // type of value
-	storage  Storage    // how the value is stored
-	value    string     // constant, global address
-	offset   int        // relative to BP, typically negative
+	backing  Backing    // how the value is stored
+	value    string     // constant or global address
+	offset   int        // relative to BP, stored positively, set for LocalBacking
 	register *Register  // set if register storage
 	dirty    bool       // value in register is more recent than at storage location
 }
@@ -27,39 +27,42 @@ type Value struct {
 func NewGlobalValue(name string, typ types.Type) *Value {
 	return &Value{
 		typ:     typ,
-		storage: GlobalStorage,
+		backing: GlobalBacking,
 		value:   name,
 	}
 }
 
-func NewIdentifier(name string, typ types.Type, offset int) *Value {
+func NewLocalValue(typ types.Type, offset int) *Value {
 	return &Value{
 		typ:     typ,
-		storage: LocalStorage,
+		backing: LocalBacking,
 		offset:  offset,
 	}
 }
+
+// func NewIdentifier(name string, typ types.Type, offset int) *Value {
+// 	return &Value{
+// 		typ:     typ,
+// 		storage: LocalStorage,
+// 		offset:  offset,
+// 	}
+// }
 
 func (v *Value) GetType() types.Type {
 	return v.typ
 }
 
 func (v *Value) Source() string {
-	useRegister := v.storage == RegisterStorage || v.register != nil
-
 	switch {
-	case v.storage == ConstantStorage:
+	case v.register != nil:
+		return v.register.Name(4) // TODO: size
+
+	case v.backing == ConstantBacking:
 		return v.value
 
-	case useRegister:
-		return v.register.Name(4)
-
-	case v.storage == LocalStorage:
-		// TODO: use type
-		return fmt.Sprintf("dword [rsp - %d]", -v.offset)
-
-	case v.storage == GlobalStorage:
-		return v.value
+	case v.backing == LocalBacking:
+		// TODO: use type/size
+		return fmt.Sprintf("dword [rsp - %d]", v.offset)
 
 	default:
 		panic("Value.Source() undefined case!")
