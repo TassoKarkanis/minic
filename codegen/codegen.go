@@ -161,7 +161,7 @@ func (c *Codegen) ReleaseValue(key GetText) {
 
 // Add generates code for the sum of two values and registers the result under the given key.
 func (c *Codegen) Add(key GetText, v1, v2 *Value) {
-	val := c.allocateTransientValue(v1.typ)
+	val := c.allocateTransientValue(v1.typ, nil)
 
 	// TODO: use proper register size
 	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
@@ -170,15 +170,48 @@ func (c *Codegen) Add(key GetText, v1, v2 *Value) {
 	c.setValue(key, val)
 }
 
-// Subtract geneates code for the difference of two values and registers the result under the given key.
+// Subtract generates code for the difference of two values and registers the result under the given key.
 func (c *Codegen) Subtract(key GetText, v1, v2 *Value) {
-	val := c.allocateTransientValue(v1.typ)
+	val := c.allocateTransientValue(v1.typ, nil)
 
 	// TODO: use proper register size
 	fmt.Fprintf(c.out, "\tmov %s, %s\n", val.Source(), v1.Source())
 	fmt.Fprintf(c.out, "\tsub %s, %s\n", val.Source(), v2.Source())
 
 	c.setValue(key, val)
+}
+
+// Multiply generates code for the product of two values and registers the result under the given key.
+func (c *Codegen) Multiply(key GetText, v1, v2 *Value) {
+	// Only RAX can do multiplication.  Also, the high bits end up in RDX.
+
+	// unbind rdx
+	rdx := c.integerReg[RDX]
+	c.unbindRegister(rdx)
+
+	// make rax contain the left side
+	rax := c.integerReg[RAX]
+	if v1.register == nil || v1.register != rax {
+		c.unbindRegister(rax)
+		fmt.Fprintf(c.out, "\tmov %s, %s\n", rax.dwordName, v1.Source())
+	}
+
+	// perform the multiplication
+	fmt.Fprintf(c.out, "\tmul %s\n", v2.Source())
+
+	// allocate and set the value
+	val := c.allocateTransientValue(v1.typ, rax)
+	c.setValue(key, val)
+}
+
+// Divide generates code for the dividend of two values and registers the result under the given key.
+func (c *Codegen) Divide(key GetText, v1, v2 *Value) {
+	c.fail("divide not yet implemented")
+}
+
+// Modulus generates code for the modulus of two values and registers the result under the given key.
+func (c *Codegen) Modulus(key GetText, v1, v2 *Value) {
+	c.fail("modulus not yet implemented")
 }
 
 // ReturnValue generates code to return a value from the function.
@@ -230,9 +263,11 @@ func (c *Codegen) allocateRegister() *Register {
 	return nil
 }
 
-func (c *Codegen) allocateTransientValue(typ types.Type) *Value {
-	// allocate a register
-	reg := c.allocateRegister()
+func (c *Codegen) allocateTransientValue(typ types.Type, reg *Register) *Value {
+	// allocate a register if necessary
+	if reg == nil {
+		reg = c.allocateRegister()
+	}
 
 	// allocate a stack value
 	offset := c.stack.Alloc4() // TODO: proper size
@@ -248,6 +283,28 @@ func (c *Codegen) bind(val *Value, reg *Register, dirty bool) {
 	val.register = reg
 	val.dirty = dirty
 	reg.binding = val
+}
+
+func (c *Codegen) unbindRegister(reg *Register) {
+	if reg.binding == nil {
+		return // nothing to do
+	}
+
+	// store the register value to its backing, if necessary
+	val := reg.binding
+	if val.dirty {
+		switch val.backing {
+		case LocalBacking:
+			fmt.Fprintf(c.out, "\tmov %s, %s ; flush to local\n", reg.dwordName, val.Source())
+
+		default:
+			c.fail("unhandled case in unbindRegister()")
+		}
+	}
+
+	// unbind
+	reg.binding = nil
+	val.register = nil
 }
 
 func (c *Codegen) endFrameLabel() string {

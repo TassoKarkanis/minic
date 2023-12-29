@@ -36,6 +36,10 @@ func TestSub(t *testing.T) {
 	runTest(t, "sub")
 }
 
+func TestMult(t *testing.T) {
+	runTest(t, "mult")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,

@@ -21,7 +21,7 @@ func (c *MainPass) ExitExpression(ctx *parser.ExpressionContext) {
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -49,7 +49,7 @@ func (c *MainPass) ExitAssignmentExpression(ctx *parser.AssignmentExpressionCont
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -83,7 +83,7 @@ func (c *MainPass) ExitLogicalOrExpression(ctx *parser.LogicalOrExpressionContex
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -103,7 +103,7 @@ func (c *MainPass) ExitLogicalAndExpression(ctx *parser.LogicalAndExpressionCont
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -123,7 +123,7 @@ func (c *MainPass) ExitInclusiveOrExpression(ctx *parser.InclusiveOrExpressionCo
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -143,7 +143,7 @@ func (c *MainPass) ExitExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionCo
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -163,7 +163,7 @@ func (c *MainPass) ExitAndExpression(ctx *parser.AndExpressionContext) {
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -183,7 +183,7 @@ func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext)
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -203,7 +203,7 @@ func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionCont
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -223,7 +223,7 @@ func (c *MainPass) ExitShiftExpression(ctx *parser.ShiftExpressionContext) {
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -264,7 +264,7 @@ func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext)
 		c.cgen.ReleaseValue(e2)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -276,15 +276,38 @@ func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpres
 	e := c.exitf("%s", ctx.GetText())
 	defer e()
 
-	exp1 := ctx.CastExpression()
-	exp2 := ctx.MultiplicativeExpression()
+	e1 := ctx.CastExpression()
+	e2 := ctx.MultiplicativeExpression()
+	mult := ctx.Star() != nil
+	div := ctx.Div() != nil
+	mod := ctx.Mod() != nil
 
 	switch {
-	case exp1 != nil && exp2 == nil:
-		c.cgen.MoveValue(ctx, exp1)
+	case e1 != nil && e2 == nil:
+		c.cgen.MoveValue(ctx, e1)
+
+	case e1 != nil && e2 != nil:
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+
+		switch {
+		case mult:
+			c.cgen.Multiply(ctx, v1, v2)
+
+		case div:
+			c.cgen.Divide(ctx, v1, v2)
+
+		case mod:
+			c.cgen.Modulus(ctx, v1, v2)
+
+		default:
+			c.fail("unhandled case!")
+		}
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -309,7 +332,7 @@ func (c *MainPass) ExitCastExpression(ctx *parser.CastExpressionContext) {
 		c.cgen.MoveValue(ctx, exp3)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -328,7 +351,7 @@ func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
@@ -347,7 +370,7 @@ func (c *MainPass) ExitPostfixExpression(ctx *parser.PostfixExpressionContext) {
 		c.cgen.MoveValue(ctx, exp1)
 
 	default:
-		panic("unhandled case!")
+		c.fail("unhandled case!")
 	}
 }
 
