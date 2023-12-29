@@ -113,14 +113,14 @@ func (c *Codegen) Close() {
 	}
 }
 
-func (c *Codegen) StartStackFrame(name string, params []types.Type) []*Value {
+func (c *Codegen) StartStackFrame(name string, paramNames []string, paramTypes []types.Type) []*Value {
 	// we don't handle nested functions
 	if len(c.scopes) > 0 {
 		c.fail("cannot handle nested scopes!")
 	}
 
 	// we can only handle parameters in registers for now
-	if len(params) > 6 {
+	if len(paramNames) > 6 {
 		c.fail("cannot handle more than 6 parameters!")
 	}
 
@@ -134,7 +134,7 @@ func (c *Codegen) StartStackFrame(name string, params []types.Type) []*Value {
 
 	// allocate values for the parameters
 	var values []*Value
-	for i, typ := range params {
+	for i, typ := range paramTypes {
 		offset := scope.offset - 4 // TODO: based on type
 		scope.offset = offset
 
@@ -147,6 +147,8 @@ func (c *Codegen) StartStackFrame(name string, params []types.Type) []*Value {
 			dirty:    true,
 		}
 		values = append(values, val)
+
+		fmt.Fprintf(c.out, "\t; param %s %s -> %s\n", typ.String(), paramNames[i], val.register.Name(4)) // TODO
 	}
 
 	return values

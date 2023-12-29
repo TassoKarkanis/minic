@@ -24,6 +24,10 @@ func TestAdd(t *testing.T) {
 	runTest(t, "add")
 }
 
+// func TestAddMany(t *testing.T) {
+// 	runTest(t, "add-many")
+// }
+
 func TestReturnArg(t *testing.T) {
 	runTest(t, "return-arg")
 }
@@ -84,14 +88,20 @@ func (r *testRunner) compile() {
 
 func (r *testRunner) compareToExpected() {
 	// read the expected file
-	expected, err := os.ReadFile(r.getFile(FileExpectedAsm))
+	expectedFile := r.getFile(FileExpectedAsm)
+	expected, err := os.ReadFile(expectedFile)
 	r.NoError(err)
 
 	// compare the generated output with the expected
-	actual, err := os.ReadFile(r.getFile(FileOutputAsm))
+	actualFile := r.getFile(FileOutputAsm)
+	actual, err := os.ReadFile(actualFile)
 	r.NoError(err)
 
 	if string(actual) != string(expected) {
+		// diff the two files
+		cmdLine := []string{"diff", "-c", expectedFile, actualFile}
+		output, _ := r.runCommand(cmdLine)
+		fmt.Println(output)
 		r.Fail("result not as expected")
 	}
 }
@@ -133,15 +143,21 @@ func (r *testRunner) buildBin() {
 }
 
 func (r *testRunner) runTest() {
-	cmd := exec.Command(r.getFile(FileOutputBin))
+	cmdLine := []string{r.getFile(FileOutputBin)}
+	output, err := r.runCommand(cmdLine)
+	fmt.Print(output)
+	r.NoError(err)
+}
+
+func (r *testRunner) runCommand(cmdLine []string) (string, error) {
+	cmd := exec.Command(cmdLine[0], cmdLine[1:]...)
 	stdout := &bytes.Buffer{}
 	stderr := &bytes.Buffer{}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	err := cmd.Run()
-	fmt.Print(stdout.String())
-	fmt.Print(stderr.String())
-	r.NoError(err)
+	output := stdout.String() + stderr.String()
+	return output, err
 }
 
 func (r *testRunner) getFile(fileType FileType) string {

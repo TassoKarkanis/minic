@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/TassoKarkanis/minic/minic/mainpass"
 	"github.com/TassoKarkanis/minic/parser"
 	"github.com/antlr/antlr4/runtime/Go/antlr"
 )
@@ -119,7 +120,7 @@ func (m *MiniC) runMainPass(inputFile string, output io.Writer) error {
 	p := parser.NewCParser(stream)
 
 	// Finally parse the expression
-	codegen := NewMainPass(output)
+	codegen := mainpass.NewMainPass(output)
 	antlr.ParseTreeWalkerDefault.Walk(codegen, p.CompilationUnit())
 	return nil
 }

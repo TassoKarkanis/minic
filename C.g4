@@ -31,14 +31,14 @@ grammar C;
 
 
 primaryExpression
-    :   Identifier
-    |   Constant
-    |   StringLiteral+
-    |   '(' expression ')'
-    |   genericSelection
-    |   '__extension__'? '(' compoundStatement ')' // Blocks (GCC extension)
-    |   '__builtin_va_arg' '(' unaryExpression ',' typeName ')'
-    |   '__builtin_offsetof' '(' typeName ',' unaryExpression ')'
+    :   Identifier # PrimaryExpressionIdentifier
+    |   Constant # PrimaryExpressionConstant
+    |   StringLiteral+ # PrimaryExpressionStringLiteral
+    |   '(' expression ')' # PrimaryExpressionParens
+    |   genericSelection # PrimaryExpressionGeneric
+    |   '__extension__'? '(' compoundStatement ')' # PrimaryExpressionExtension // Blocks (GCC extension)
+    |   '__builtin_va_arg' '(' unaryExpression ',' typeName ')' # PrimaryExpressionVaArg
+    |   '__builtin_offsetof' '(' typeName ',' unaryExpression ')' # PrimaryExpressionOffsetOf
     ;
 
 genericSelection
