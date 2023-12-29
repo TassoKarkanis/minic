@@ -30,7 +30,7 @@ func (m *MiniC) CompileFile(inputFile string, outputFile string) (err error) {
 	defer func() {
 		obj := recover()
 		if obj != nil {
-			err = fmt.Errorf("%s", obj.(string))
+			err = fmt.Errorf("%v", obj.(string))
 			output.Close()
 		}
 	}()

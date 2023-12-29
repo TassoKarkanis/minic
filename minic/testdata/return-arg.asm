@@ -4,7 +4,7 @@ section .text
 	global f
 
 f:
-	; param 'int' x -> edi
+	; param 'int' x -> edi [rsp - 0]
 	push rbx
 	push r12
 	push r13

@@ -40,6 +40,10 @@ func TestMult(t *testing.T) {
 	runTest(t, "mult")
 }
 
+func TestVar(t *testing.T) {
+	runTest(t, "var")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,

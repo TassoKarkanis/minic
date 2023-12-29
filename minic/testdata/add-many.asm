@@ -4,12 +4,12 @@ section .text
 	global f
 
 f:
-	; param 'int' a0 -> edi
-	; param 'int' a1 -> esi
-	; param 'int' a2 -> edx
-	; param 'int' a3 -> ecx
-	; param 'int' a4 -> r8d
-	; param 'int' a5 -> r9d
+	; param 'int' a0 -> edi [rsp - 0]
+	; param 'int' a1 -> esi [rsp - 4]
+	; param 'int' a2 -> edx [rsp - 8]
+	; param 'int' a3 -> ecx [rsp - 12]
+	; param 'int' a4 -> r8d [rsp - 16]
+	; param 'int' a5 -> r9d [rsp - 20]
 	push rbx
 	push r12
 	push r13

@@ -5,56 +5,56 @@ import (
 )
 
 func (c *MainPass) EnterStatement(ctx *parser.StatementContext) {
-	c.enterf("Statement", "%s", ctx.GetText())
+	c.enterRule(ctx, "Statement")
 }
 
 func (c *MainPass) ExitStatement(ctx *parser.StatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterExpressionStatement(ctx *parser.ExpressionStatementContext) {
-	c.enterf("ExpressionStatement", "%s", ctx.GetText())
+	c.enterRule(ctx, "ExpressionStatement")
 }
 
 func (c *MainPass) ExitExpressionStatement(ctx *parser.ExpressionStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterIterationStatement(ctx *parser.IterationStatementContext) {
-	c.enterf("IterationStatement", "%s", ctx.GetText())
+	c.enterRule(ctx, "IterationStatement")
 }
 
 func (c *MainPass) ExitIterationStatement(ctx *parser.IterationStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterLabeledStatement(ctx *parser.LabeledStatementContext) {
-	c.enterf("LabeledStatement", "%s", ctx.GetText())
+	c.enterRule(ctx, "LabeledStatement")
 }
 
 func (c *MainPass) ExitLabeledStatement(ctx *parser.LabeledStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterSelectionStatement(ctx *parser.SelectionStatementContext) {
-	c.enterf("SelectionStatement", "%s", ctx.GetText())
+	c.enterRule(ctx, "SelectionStatement")
 }
 
 func (c *MainPass) ExitSelectionStatement(ctx *parser.SelectionStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterJumpStatement(ctx *parser.JumpStatementContext) {
-	c.enterf("JumpStatement", "%s", ctx.GetText())
+	c.enterRule(ctx, "JumpStatement")
 }
 
 func (c *MainPass) ExitJumpStatement(ctx *parser.JumpStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	switch {

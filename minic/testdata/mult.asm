@@ -4,8 +4,8 @@ section .text
 	global f
 
 f:
-	; param 'int' a0 -> edi
-	; param 'int' a1 -> esi
+	; param 'int' a0 -> edi [rsp - 0]
+	; param 'int' a1 -> esi [rsp - 4]
 	push rbx
 	push r12
 	push r13

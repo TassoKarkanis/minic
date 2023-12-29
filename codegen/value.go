@@ -20,8 +20,9 @@ type Value struct {
 	backing  Backing    // how the value is stored
 	value    string     // constant or global address
 	offset   int        // relative to BP, stored positively, set for LocalBacking
-	register *Register  // set if register storage
+	register *Register  // set if register is "bound" to this value
 	dirty    bool       // value in register is more recent than at storage location
+	lvalue   bool       // true if the Value is an l-value
 }
 
 func NewGlobalValue(name string, typ types.Type) *Value {
@@ -29,24 +30,18 @@ func NewGlobalValue(name string, typ types.Type) *Value {
 		typ:     typ,
 		backing: GlobalBacking,
 		value:   name,
+		lvalue:  true,
 	}
 }
 
-func NewLocalValue(typ types.Type, offset int) *Value {
+func NewLocalValue(typ types.Type, offset int, lvalue bool) *Value {
 	return &Value{
 		typ:     typ,
 		backing: LocalBacking,
 		offset:  offset,
+		lvalue:  lvalue,
 	}
 }
-
-// func NewIdentifier(name string, typ types.Type, offset int) *Value {
-// 	return &Value{
-// 		typ:     typ,
-// 		storage: LocalStorage,
-// 		offset:  offset,
-// 	}
-// }
 
 func (v *Value) GetType() types.Type {
 	return v.typ

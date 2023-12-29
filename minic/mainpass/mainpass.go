@@ -38,10 +38,10 @@ type MainPass struct {
 	Function           *types.FunctionType
 	cgen               *codegen.Codegen
 	Err                error
-	Types              map[antlr.ParserRuleContext]types.Type
 	Declarations       map[antlr.ParserRuleContext]Declaration
 	EnterContinuations map[antlr.ParserRuleContext]func()
 	ExitContinuations  map[antlr.ParserRuleContext]func()
+	types              map[antlr.ParserRuleContext]types.Type
 	enterStack         []string
 }
 
@@ -51,10 +51,10 @@ func NewMainPass(output io.Writer) *MainPass {
 	return &MainPass{
 		Output:             output,
 		Symbols:            symbols.NewTable(),
-		Types:              make(map[antlr.ParserRuleContext]types.Type),
 		Declarations:       make(map[antlr.ParserRuleContext]Declaration),
 		EnterContinuations: make(map[antlr.ParserRuleContext]func()),
 		ExitContinuations:  make(map[antlr.ParserRuleContext]func()),
+		types:              make(map[antlr.ParserRuleContext]types.Type),
 	}
 }
 
@@ -71,20 +71,20 @@ func (c *MainPass) VisitTerminal(node antlr.TerminalNode) {
 }
 
 func (c *MainPass) EnterCompilationUnit(ctx *parser.CompilationUnitContext) {
-	c.enterf("CompilationUnit", ctx.GetText())
+	c.enterRule(ctx, "CompilationUnit")
 }
 
 func (c *MainPass) ExitCompilationUnit(ctx *parser.CompilationUnitContext) {
-	e := c.exitf("")
+	e := c.exitRule(ctx)
 	defer e()
 }
 
 func (c *MainPass) EnterTypeSpecifier(ctx *parser.TypeSpecifierContext) {
-	c.enterf("TypeSpecifier", "%s", ctx.GetText())
+	c.enterRule(ctx, "TypeSpecifier")
 }
 
 func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	cp := ctx.GetParser().(*parser.CParser)
@@ -102,7 +102,7 @@ func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
 	setBasicType := func(parserType int) {
 		typ := types.NewBasicType(parserType, cp)
 		c.debugf("setBasicType(): %s\n", typ)
-		c.Types[ctx] = typ
+		c.setType(ctx, typ)
 	}
 
 	switch {
@@ -131,19 +131,16 @@ func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
 		c.fail("type specifier not supported")
 	}
 
-	c.debugf("result: %s\n", c.Types[ctx])
+	c.debugf("result: %s\n", c.getType(ctx))
 }
 
 func (c *MainPass) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
-	c.enterf("CompoundStatement", "%s", ctx.GetText())
-	c.runEnterContinuation(ctx)
+	c.enterRule(ctx, "CompoundStatement")
 }
 
 func (c *MainPass) ExitCompoundStatement(ctx *parser.CompoundStatementContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
-
-	c.runExitContinuation(ctx)
 }
 
 func (c *MainPass) setEnterContinuation(ctx antlr.ParserRuleContext, f func()) {
@@ -164,18 +161,27 @@ func (c *MainPass) setExitContinuation(ctx antlr.ParserRuleContext, f func()) {
 	c.ExitContinuations[ctx] = f
 }
 
-func (c *MainPass) runEnterContinuation(ctx antlr.ParserRuleContext) {
-	f, found := c.EnterContinuations[ctx]
+func (c *MainPass) setType(ctx antlr.ParserRuleContext, typ types.Type) {
+	_, found := c.types[ctx]
 	if found {
-		f()
+		c.fail("setType(): type already set")
 	}
+
+	c.types[ctx] = typ
 }
 
-func (c *MainPass) runExitContinuation(ctx antlr.ParserRuleContext) {
-	f, found := c.ExitContinuations[ctx]
-	if found {
-		f()
+func (c *MainPass) getType(ctx antlr.ParserRuleContext) types.Type {
+	typ, found := c.types[ctx]
+	if !found {
+		c.fail("getType(): type not set")
 	}
+
+	return typ
+}
+
+func (c *MainPass) copyType(dest, src antlr.ParserRuleContext) {
+	typ := c.getType(src)
+	c.setType(dest, typ)
 }
 
 func (c *MainPass) fail(format string, a ...interface{}) {
@@ -183,35 +189,42 @@ func (c *MainPass) fail(format string, a ...interface{}) {
 	panic(c.Err.Error())
 }
 
-func (c *MainPass) enterf(stackStr string, format string, a ...interface{}) {
+func (c *MainPass) enterRule(ctx antlr.ParserRuleContext, name string) {
 	// log the message
-	msg := "Enter" + stackStr + "()"
-	if format != "" {
-		msg += ": " + fmt.Sprintf(format, a...)
-	}
-	c.debugf(msg)
+	funcName := "Enter" + name + "()"
+	c.debugf("%s: %s", funcName, ctx.GetText())
 
 	// push the enter stack
-	c.enterStack = append(c.enterStack, stackStr)
+	c.enterStack = append(c.enterStack, name)
+
+	// run the enter continuation
+	f, found := c.EnterContinuations[ctx]
+	if found {
+		f()
+	}
 }
 
-func (c *MainPass) exitf(format string, a ...interface{}) func() {
+func (c *MainPass) exitRule(ctx antlr.ParserRuleContext) func() {
 	// pop the stack
-	stackStr := c.enterStack[len(c.enterStack)-1]
+	name := c.enterStack[len(c.enterStack)-1]
 	c.enterStack = c.enterStack[0 : len(c.enterStack)-1]
 
 	// print the message
-	msg := "Exit" + stackStr + "()"
-	if format != "" {
-		msg += ": " + fmt.Sprintf(format, a...)
-	}
-	c.debugf(msg)
+	funcName := "Exit" + name + "()"
+	c.debugf("%s: %s", funcName, ctx.GetText())
 
 	// put it back on the stack (to indent log statements in the current function)
-	c.enterStack = append(c.enterStack, stackStr)
+	c.enterStack = append(c.enterStack, name)
 
 	// return a function that pops the stack
 	return func() {
+		// run the exit continuation
+		f, found := c.ExitContinuations[ctx]
+		if found {
+			f()
+		}
+
+		// pop the stack
 		c.enterStack = c.enterStack[0 : len(c.enterStack)-1]
 	}
 }

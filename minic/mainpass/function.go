@@ -7,11 +7,11 @@ import (
 )
 
 func (c *MainPass) EnterParameterTypeList(ctx *parser.ParameterTypeListContext) {
-	c.enterf("ParameterTypeList", "%s", ctx.GetText())
+	c.enterRule(ctx, "ParameterTypeList")
 }
 
 func (c *MainPass) ExitParameterTypeList(ctx *parser.ParameterTypeListContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	paramList := ctx.ParameterList()
@@ -19,24 +19,24 @@ func (c *MainPass) ExitParameterTypeList(ctx *parser.ParameterTypeListContext) {
 
 	switch {
 	case paramList != nil && ellipsis == nil:
-		params := c.Types[paramList].(*types.FunctionType)
-		c.Types[ctx] = &types.FunctionType{
+		params := c.getType(paramList).(*types.FunctionType)
+		c.setType(ctx, &types.FunctionType{
 			Params: params.Params,
-		}
+		})
 
 	default:
 		c.fail("varargs not supported")
 	}
 
-	c.debugf("result: %+v\n", c.Types[ctx])
+	c.debugf("result: %+v\n", c.getType(ctx))
 }
 
 func (c *MainPass) EnterParameterList(ctx *parser.ParameterListContext) {
-	c.enterf("ParameterList", "%s", ctx.GetText())
+	c.enterRule(ctx, "ParameterList")
 }
 
 func (c *MainPass) ExitParameterList(ctx *parser.ParameterListContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	paramDecl := ctx.ParameterDeclaration()
@@ -45,38 +45,38 @@ func (c *MainPass) ExitParameterList(ctx *parser.ParameterListContext) {
 	switch {
 	case paramDecl != nil && paramList == nil:
 		param := c.Declarations[paramDecl]
-		c.Types[ctx] = &types.FunctionType{
+		c.setType(ctx, &types.FunctionType{
 			Params: []types.Param{
 				{
 					Name: param.Name,
 					Type: param.Type,
 				},
 			},
-		}
+		})
 
 	case paramList != nil && paramDecl != nil:
-		params := c.Types[paramList].(*types.FunctionType)
+		params := c.getType(paramList).(*types.FunctionType)
 		param := c.Declarations[paramDecl]
-		c.Types[ctx] = &types.FunctionType{
+		c.setType(ctx, &types.FunctionType{
 			Params: append(params.Params, types.Param{
 				Name: param.Name,
 				Type: param.Type,
 			}),
-		}
+		})
 
 	default:
 		c.fail("ExitParameterList: invalid case")
 	}
 
-	c.debugf("result: %+v\n", c.Types[ctx])
+	c.debugf("result: %+v\n", c.getType(ctx))
 }
 
 func (c *MainPass) EnterParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
-	c.enterf("ParameterDeclaration", "%s", ctx.GetText())
+	c.enterRule(ctx, "ParameterDeclaration")
 }
 
 func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	declSpec := ctx.DeclarationSpecifiers()
@@ -85,7 +85,7 @@ func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationCont
 
 	switch {
 	case declSpec != nil && declarator != nil:
-		typ := c.Types[declSpec]
+		typ := c.getType(declSpec)
 		decl := c.Declarations[declarator]
 		c.debugf("typ: %s\n", typ)
 		c.debugf("decl: %s\n", decl)
@@ -122,7 +122,7 @@ func (c *MainPass) ExitParameterDeclaration(ctx *parser.ParameterDeclarationCont
 }
 
 func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
-	c.enterf("FunctionDefinition", ctx.GetText())
+	c.enterRule(ctx, "FunctionDefinition")
 
 	if c.Function != nil {
 		c.fail("nested function not implemented")
@@ -142,7 +142,7 @@ func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext
 
 		declSpec := declSpecs.DeclarationSpecifier(0).(*parser.DeclarationSpecifierContext)
 		c.setExitContinuation(declSpec, func() {
-			c.Function.ReturnType = c.Types[declSpec]
+			c.Function.ReturnType = c.getType(declSpec)
 		})
 	}
 
@@ -196,7 +196,7 @@ func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext
 }
 
 func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
-	e := c.exitf("%s", ctx.GetText())
+	e := c.exitRule(ctx)
 	defer e()
 
 	c.Symbols.PopScope()
