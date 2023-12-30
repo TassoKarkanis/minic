@@ -16,8 +16,9 @@ f:
 	mov eax, esi
 	mul edi
 	; var 'int' x -> ebx [rsp - 16]
-	mov dword [rsp - 16], eax
-	mov eax, dword [rsp - 16]
+	mov ebx, eax ; update l-value register
+	mov dword [rsp - 16], ebx ; store l-value
+	mov eax, ebx
 	add eax, dword [rsp - 8]
 	jmp f.end
 f.end:

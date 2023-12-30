@@ -134,15 +134,6 @@ func (c *MainPass) ExitTypeSpecifier(ctx *parser.TypeSpecifierContext) {
 	c.debugf("result: %s\n", c.getType(ctx))
 }
 
-func (c *MainPass) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
-	c.enterRule(ctx, "CompoundStatement")
-}
-
-func (c *MainPass) ExitCompoundStatement(ctx *parser.CompoundStatementContext) {
-	e := c.exitRule(ctx)
-	defer e()
-}
-
 func (c *MainPass) setEnterContinuation(ctx antlr.ParserRuleContext, f func()) {
 	_, found := c.EnterContinuations[ctx]
 	if found {

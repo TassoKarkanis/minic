@@ -16,6 +16,8 @@ const (
 )
 
 type Value struct {
+	owner    *Codegen   // owning code generator
+	refCount int        // reference count, see Retain() and Release()
 	typ      types.Type // type of value
 	backing  Backing    // how the value is stored
 	value    string     // constant or global address
@@ -25,8 +27,9 @@ type Value struct {
 	lvalue   bool       // true if the Value is an l-value
 }
 
-func NewGlobalValue(name string, typ types.Type) *Value {
+func newGlobalValue(owner *Codegen, name string, typ types.Type) *Value {
 	return &Value{
+		owner:   owner,
 		typ:     typ,
 		backing: GlobalBacking,
 		value:   name,
@@ -34,8 +37,9 @@ func NewGlobalValue(name string, typ types.Type) *Value {
 	}
 }
 
-func NewLocalValue(typ types.Type, offset int, lvalue bool) *Value {
+func newLocalValue(owner *Codegen, typ types.Type, offset int, lvalue bool) *Value {
 	return &Value{
+		owner:   owner,
 		typ:     typ,
 		backing: LocalBacking,
 		offset:  offset,
@@ -43,23 +47,55 @@ func NewLocalValue(typ types.Type, offset int, lvalue bool) *Value {
 	}
 }
 
+func (v *Value) Retain() {
+	if v.owner == nil {
+		panic("Retain() on dead value")
+	}
+
+	v.refCount++
+}
+
+func (v *Value) Release() {
+	if v.owner == nil {
+		panic("Release() on dead value")
+	}
+
+	v.refCount--
+	if v.refCount == 0 {
+		v.owner.releaseValue(v)
+	}
+}
+
 func (v *Value) GetType() types.Type {
 	return v.typ
 }
 
+// Source returns the string representation of the bound register,
+// constant, or address of the value.
 func (v *Value) Source() string {
-	switch {
-	case v.register != nil:
+	if v.register != nil {
 		return v.register.Name(4) // TODO: size
+	} else {
+		return v.RawSource()
+	}
+}
 
+// RawSource returns the string representation of the value ignoring
+// the register assignment.
+func (v *Value) RawSource() string {
+	switch {
 	case v.backing == ConstantBacking:
 		return v.value
 
 	case v.backing == LocalBacking:
-		// TODO: use type/size
-		return fmt.Sprintf("dword [rsp - %d]", v.offset)
+		return fmt.Sprintf("dword [rsp - %d]", v.offset) // TODO: size
 
 	default:
 		panic("Value.Source() undefined case!")
 	}
+}
+
+// IsBound returns true if the value currently has a register assigment.
+func (v *Value) IsBound() bool {
+	return v.register != nil
 }

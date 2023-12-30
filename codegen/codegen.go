@@ -36,13 +36,17 @@ func NewCodegen(out io.Writer) *Codegen {
 // Close checks that all values have been released.
 func (c *Codegen) Close() {
 	if len(c.values) > 0 {
-		var unreleasedVal GetText
-		for key := range c.values {
-			unreleasedVal = key
+		for k, v := range c.values {
+			c.fail("unreleased value: (%s) (%v)", k.GetText(), v)
 			break
 		}
-		c.fail("unreleased value: %s", unreleasedVal)
+
 	}
+}
+
+// CreateFunction returns a value that represents a function.
+func (c *Codegen) CreateFunction(name string, typ types.Type) *Value {
+	return newGlobalValue(c, name, typ)
 }
 
 // StartStackFrame writes the function program and creates values for the parameters.
@@ -62,7 +66,7 @@ func (c *Codegen) StartStackFrame(name string, paramNames []string, paramTypes [
 		offset := c.stack.Alloc4() // TODO: based on type
 
 		// create the value
-		val := NewLocalValue(typ, offset, true)
+		val := newLocalValue(c, typ, offset, true)
 		c.bind(val, c.integerReg[integerParameterOrder[i]], true)
 		values = append(values, val)
 
@@ -102,6 +106,7 @@ func (c *Codegen) EndStackFrame() {
 // to the given key.
 func (c *Codegen) CreateIntLiteralValue(key GetText, typ types.Type, value string) *Value {
 	val := &Value{
+		owner:   c,
 		typ:     typ,
 		backing: ConstantBacking,
 		value:   value,
@@ -120,6 +125,7 @@ func (c *Codegen) CreateLocalValue(name string, typ types.Type) *Value {
 
 	// make the value value
 	val := &Value{
+		owner:   c,
 		typ:     typ,
 		backing: LocalBacking,
 		offset:  offset,
@@ -142,6 +148,7 @@ func (c *Codegen) CreateValue(key GetText, val *Value) {
 	}
 
 	c.values[key] = val
+	val.Retain()
 }
 
 // GetValue returns the value associated with the key.
@@ -167,6 +174,26 @@ func (c *Codegen) TransferValue(destKey, srcKey GetText) {
 	delete(c.values, srcKey)
 }
 
+// ReleaseValue unregisters a value and unbinds the associated register if necessary.
+func (c *Codegen) ReleaseValue(key GetText) {
+	if c.values[key] == nil {
+		c.fail("value to release not found: %s", key.GetText())
+	}
+
+	val := c.values[key]
+	delete(c.values, key)
+	val.Release()
+}
+
+func (c *Codegen) MoveValue(destKey, srcKey GetText) {
+	dest := c.values[destKey]
+	if dest == nil {
+		c.fail("MoveValue(): destination not found")
+	}
+
+	c.Move(dest, srcKey)
+}
+
 // Move copies the source to the destination.
 func (c *Codegen) Move(dest *Value, srcKey GetText) {
 	src := c.values[srcKey]
@@ -179,28 +206,37 @@ func (c *Codegen) Move(dest *Value, srcKey GetText) {
 		c.fail("Move(): moving into rvalue")
 	}
 
-	// unbind destination register, if any
-	c.unbindValue(dest)
-
-	// move src -> dest
-	fmt.Fprintf(c.out, "\tmov %s, %s\n", dest.Source(), src.Source())
-}
-
-// ReleaseValue unregisters a value and unbinds the associated register if necessary.
-func (c *Codegen) ReleaseValue(key GetText) {
-	if c.values[key] == nil {
-		c.fail("value to release not found: %s", key.GetText())
+	// ignore statements like "x = x;"
+	if dest == src {
+		return
 	}
 
-	// clear the register binding, if any
-	val := c.values[key]
-	if val.register != nil {
-		reg := val.register
-		val.register = nil
-		reg.binding = nil
-	}
+	// generate move instructions, but note that only one param can be an address
+	destBound := dest.IsBound()
+	srcBound := src.IsBound()
+	switch {
+	case destBound && srcBound:
+		fallthrough
+	case destBound && !srcBound:
+		// move to the destination register
+		fmt.Fprintf(c.out, "\tmov %s, %s ; update l-value register\n", dest.Source(), src.Source())
 
-	delete(c.values, key)
+		// move to the destination address
+		fmt.Fprintf(c.out, "\tmov %s, %s ; store l-value\n", dest.RawSource(), dest.Source())
+
+	case !destBound && srcBound:
+		fmt.Fprintf(c.out, "\tmov %s, %s ; store l-value\n", dest.Source(), src.Source())
+
+	case !destBound && !srcBound:
+		// allocate a register for the source
+		c.allocateValueRegister(src)
+
+		// load source value
+		fmt.Fprintf(c.out, "\tmov %s, %s ; load mov source\n", src.Source(), src.RawSource())
+
+		// move to the destination
+		fmt.Fprintf(c.out, "\tmov %s, %s ; store l-value\n", dest.Source(), src.Source())
+	}
 }
 
 // Add generates code for the sum of two values and registers the result under the given key.
@@ -231,12 +267,12 @@ func (c *Codegen) Multiply(key GetText, v1, v2 *Value) {
 
 	// unbind rdx
 	rdx := c.integerReg[RDX]
-	c.unbindRegister(rdx)
+	c.unbindRegister(rdx, false)
 
 	// make rax contain the left side
 	rax := c.integerReg[RAX]
 	if v1.register == nil || v1.register != rax {
-		c.unbindRegister(rax)
+		c.unbindRegister(rax, false)
 		fmt.Fprintf(c.out, "\tmov %s, %s\n", rax.dwordName, v1.Source())
 	}
 
@@ -269,9 +305,8 @@ func (c *Codegen) ReturnValue(key GetText) {
 	if val.register == rax {
 		// the value is already in RAX, nothing to do
 	} else {
-		if rax.binding != nil {
-			c.fail("rax bound during return")
-		}
+		// make rax available
+		c.unbindRegister(rax, true)
 
 		// move the value to rax
 		fmt.Fprintf(c.out, "\tmov %s, %s\n", rax.dwordName, val.Source())
@@ -286,12 +321,27 @@ func (c *Codegen) Return() {
 	fmt.Fprintf(c.out, "\tjmp %s\n", c.endFrameLabel())
 }
 
+func (c *Codegen) releaseValue(val *Value) {
+	c.unbindValue(val, true)
+	val.owner = nil
+}
+
 func (c *Codegen) setValue(key GetText, val *Value) {
 	if c.values[key] != nil {
 		c.fail("value already set for %s", key.GetText())
 	}
 
 	c.values[key] = val
+	val.Retain()
+}
+
+func (c *Codegen) allocateValueRegister(val *Value) {
+	if val.IsBound() {
+		c.fail("allocateValueRegister() called for bound value")
+	}
+
+	reg := c.allocateRegister()
+	c.bind(val, reg, false)
 }
 
 func (c *Codegen) allocateRegister() *Register {
@@ -315,7 +365,7 @@ func (c *Codegen) allocateTransientValue(typ types.Type, reg *Register) *Value {
 
 	// allocate a stack value
 	offset := c.stack.Alloc4() // TODO: proper size
-	val := NewLocalValue(typ, offset, false)
+	val := newLocalValue(c, typ, offset, false)
 
 	// bind the register to the value (we assume the register will be written)
 	c.bind(val, reg, true)
@@ -329,15 +379,15 @@ func (c *Codegen) bind(val *Value, reg *Register, dirty bool) {
 	reg.binding = val
 }
 
-func (c *Codegen) unbindValue(val *Value) {
+func (c *Codegen) unbindValue(val *Value, discard bool) {
 	if val.register == nil {
 		return
 	}
 
-	c.unbindRegister(val.register)
+	c.unbindRegister(val.register, discard)
 }
 
-func (c *Codegen) unbindRegister(reg *Register) {
+func (c *Codegen) unbindRegister(reg *Register, discard bool) {
 	if reg.binding == nil {
 		return // nothing to do
 	}
@@ -348,7 +398,7 @@ func (c *Codegen) unbindRegister(reg *Register) {
 	val.register = nil
 
 	// store the register value to its backing, if necessary
-	if val.dirty {
+	if val.dirty && !discard {
 		switch val.backing {
 		case LocalBacking:
 			fmt.Fprintf(c.out, "\tmov %s, %s ; flush to local\n", val.Source(), reg.dwordName)

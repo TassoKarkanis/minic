@@ -4,6 +4,19 @@ import (
 	"github.com/TassoKarkanis/minic/parser"
 )
 
+func (c *MainPass) EnterCompoundStatement(ctx *parser.CompoundStatementContext) {
+	c.enterRule(ctx, "CompoundStatement")
+
+	c.Symbols.PushScope()
+}
+
+func (c *MainPass) ExitCompoundStatement(ctx *parser.CompoundStatementContext) {
+	e := c.exitRule(ctx)
+	defer e()
+
+	c.Symbols.PopScope()
+}
+
 func (c *MainPass) EnterStatement(ctx *parser.StatementContext) {
 	c.enterRule(ctx, "Statement")
 }
@@ -20,6 +33,11 @@ func (c *MainPass) EnterExpressionStatement(ctx *parser.ExpressionStatementConte
 func (c *MainPass) ExitExpressionStatement(ctx *parser.ExpressionStatementContext) {
 	e := c.exitRule(ctx)
 	defer e()
+
+	e1 := ctx.Expression()
+	if e1 != nil {
+		c.cgen.ReleaseValue(e1)
+	}
 }
 
 func (c *MainPass) EnterIterationStatement(ctx *parser.IterationStatementContext) {

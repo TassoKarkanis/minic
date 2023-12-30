@@ -156,8 +156,15 @@ func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext
 		})
 	}
 
+	// create the code generator
+	c.cgen = codegen.NewCodegen(c.Output)
+
+	// push the scope for the parameters
+	c.Symbols.PushScope()
+
 	// generate the function prologue on entry of the statements
-	c.setEnterContinuation(ctx.CompoundStatement(), func() {
+	block := ctx.CompoundStatement()
+	c.setEnterContinuation(block, func() {
 		c.debugf("  starting function: %s\n", c.Function)
 
 		// fix functions with "void" for argument
@@ -185,23 +192,19 @@ func (c *MainPass) EnterFunctionDefinition(ctx *parser.FunctionDefinitionContext
 		}
 
 		// add the global symbol for the function
-		funcValue := codegen.NewGlobalValue(c.Function.Name, c.Function)
+		funcValue := c.cgen.CreateFunction(c.Function.Name, c.Function)
 		c.Symbols.AddSymbol(c.Function.Name, c.Function, funcValue)
-
-		// push the scope for the function
-		c.Symbols.PushScope()
 	})
-
-	c.cgen = codegen.NewCodegen(c.Output)
 }
 
 func (c *MainPass) ExitFunctionDefinition(ctx *parser.FunctionDefinitionContext) {
 	e := c.exitRule(ctx)
 	defer e()
 
-	c.Symbols.PopScope()
 	c.cgen.EndStackFrame()
+	c.Symbols.PopScope()
 	c.cgen.Close()
+	c.cgen = nil
 
 	c.Function = nil
 }

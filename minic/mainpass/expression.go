@@ -42,14 +42,22 @@ func (c *MainPass) ExitAssignmentExpression(ctx *parser.AssignmentExpressionCont
 	e := c.exitRule(ctx)
 	defer e()
 
-	exp1 := ctx.ConditionalExpression()
+	e1 := ctx.ConditionalExpression()
+	e2 := ctx.UnaryExpression()
+	e3 := ctx.AssignmentExpression()
+	op := ctx.AssignmentOperator()
 
 	switch {
-	case exp1 != nil:
-		c.cgen.TransferValue(ctx, exp1)
+	case e1 != nil:
+		c.cgen.TransferValue(ctx, e1)
+
+	case e2 != nil && e3 != nil && op.GetText() == "=":
+		c.cgen.MoveValue(e2, e3)
+		c.cgen.ReleaseValue(e3)
+		c.cgen.TransferValue(ctx, e2)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("AssignmentExpression: unhandled case")
 	}
 }
 
