@@ -284,15 +284,15 @@ func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpres
 	e := c.exitRule(ctx)
 	defer e()
 
-	e1 := ctx.CastExpression()
-	e2 := ctx.MultiplicativeExpression()
+	e1 := ctx.MultiplicativeExpression()
+	e2 := ctx.CastExpression()
 	mult := ctx.Star() != nil
 	div := ctx.Div() != nil
 	mod := ctx.Mod() != nil
 
 	switch {
-	case e1 != nil && e2 == nil:
-		c.cgen.TransferValue(ctx, e1)
+	case e1 == nil && e2 != nil:
+		c.cgen.TransferValue(ctx, e2)
 
 	case e1 != nil && e2 != nil:
 		v1 := c.cgen.GetValue(e1)

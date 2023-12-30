@@ -13,8 +13,8 @@ f:
 	push r14
 	push r15
 	mov dword [rsp - 8], edx ; flush to local
-	mov eax, esi
-	mul edi
+	mov eax, edi
+	mul esi
 	; var 'int' x -> ebx [rsp - 16]
 	mov ebx, eax ; update l-value register
 	mov dword [rsp - 16], ebx ; store l-value

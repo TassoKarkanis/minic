@@ -284,9 +284,29 @@ func (c *Codegen) Multiply(key GetText, v1, v2 *Value) {
 	c.setValue(key, val)
 }
 
-// Divide generates code for the dividend of two values and registers the result under the given key.
+// Divide generates code for the quotient of two values and registers the result under the given key.
 func (c *Codegen) Divide(key GetText, v1, v2 *Value) {
-	c.fail("divide not yet implemented")
+	// Only RAX can do division.  Also, the remainder end up in RDX.
+
+	// unbind rdx and clear it
+	rdx := c.integerReg[RDX]
+	c.unbindRegister(rdx, false)
+	fmt.Fprintf(c.out, "\tmov %s, 0\n", rdx.fullName)
+
+	// make rax contain the left side
+	rax := c.integerReg[RAX]
+	if v1.register == nil || v1.register != rax {
+		c.unbindRegister(rax, false)
+		fmt.Fprintf(c.out, "\tmov %s, %s\n", rax.dwordName, v1.Source())
+	}
+
+	// perform the division
+	fmt.Fprintf(c.out, "\tcdq\n")
+	fmt.Fprintf(c.out, "\tidiv %s\n", v2.Source())
+
+	// allocate and set the value
+	val := c.allocateTransientValue(v1.typ, rax)
+	c.setValue(key, val)
 }
 
 // Modulus generates code for the modulus of two values and registers the result under the given key.

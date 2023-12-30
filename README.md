@@ -1,6 +1,6 @@
 # MiniC
 
-A C parser implemented in Go.
+A toy AMD64 C compiler implemented in Go.
 
 ## Developing with Visual Studio Code
 

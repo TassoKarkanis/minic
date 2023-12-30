@@ -11,8 +11,10 @@ f:
 	push r13
 	push r14
 	push r15
+	mov rdx, 0
 	mov eax, edi
-	mul esi
+	cdq
+	idiv esi
 	jmp f.end
 f.end:
 	pop r15
