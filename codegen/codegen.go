@@ -301,6 +301,25 @@ func (c *Codegen) Multiply(key GetText, v1, v2 *Value) {
 
 // Divide generates code for the quotient of two values and registers the result under the given key.
 func (c *Codegen) Divide(key GetText, v1, v2 *Value) {
+	c.divide(key, v1, v2)
+
+	// allocate and set the value
+	rax := c.integerReg[RAX]
+	val := c.allocateTransientValue(v1.typ, rax)
+	c.setValue(key, val)
+}
+
+// Modulus generates code for the modulus of two values and registers the result under the given key.
+func (c *Codegen) Modulus(key GetText, v1, v2 *Value) {
+	c.divide(key, v1, v2)
+
+	// allocate and set the value
+	rdx := c.integerReg[RDX]
+	val := c.allocateTransientValue(v1.typ, rdx)
+	c.setValue(key, val)
+}
+
+func (c *Codegen) divide(key GetText, v1, v2 *Value) {
 	// Only RAX can do division.  Also, the remainder end up in RDX.
 
 	// unbind rdx and clear it
@@ -318,15 +337,6 @@ func (c *Codegen) Divide(key GetText, v1, v2 *Value) {
 	// perform the division
 	fmt.Fprintf(c.out, "\tcdq\n")
 	fmt.Fprintf(c.out, "\tidiv %s\n", v2.Source())
-
-	// allocate and set the value
-	val := c.allocateTransientValue(v1.typ, rax)
-	c.setValue(key, val)
-}
-
-// Modulus generates code for the modulus of two values and registers the result under the given key.
-func (c *Codegen) Modulus(key GetText, v1, v2 *Value) {
-	c.fail("modulus not yet implemented")
 }
 
 // ReturnValue generates code to return a value from the function.

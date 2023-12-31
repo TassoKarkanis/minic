@@ -40,8 +40,6 @@ Close the VS Code window that opened in Step 3.  Re-run the command from Step 2.
 
 ## Unimplemented Compiler Features
 
-* Integer arithmetic
-  * modulus operator
 * Logical operators
   * comparison operators: == and !=
   * binary operators: && and ||
