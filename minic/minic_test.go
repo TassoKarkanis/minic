@@ -56,6 +56,10 @@ func TestUnaryMinus(t *testing.T) {
 	runTest(t, "unary-minus")
 }
 
+func TestUnaryPlus(t *testing.T) {
+	runTest(t, "unary-plus")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,

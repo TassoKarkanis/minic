@@ -368,6 +368,10 @@ func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
 			c.cgen.UnaryMinus(ctx, val)
 			c.cgen.ReleaseValue(e3)
 
+		case op.Plus() != nil:
+			// nothing to do
+			c.cgen.TransferValue(ctx, e3)
+
 		default:
 			c.fail("ExitUnaryExpression(): unhandled sub-case")
 		}
