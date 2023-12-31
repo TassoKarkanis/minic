@@ -36,3 +36,84 @@ In the new VS Code window that opened in Step 3, run the command "Dev Containers
 #### Step 5. Reset the dev container
 
 Close the VS Code window that opened in Step 3.  Re-run the command from Step 2.  Attach to the container again as in Step 3.  The VS Code window should open to the Acorn Platform project and the extensions listed above should be installed.
+
+
+## Unimplemented Compiler Features
+
+* Integer arithmetic
+  * modulus operator
+  * unary plus
+* Logical operators
+  * comparison operators: == and !=
+  * binary operators: && and ||
+  * unary operators: !
+* Basic pointers
+  * pointer variables
+  * address-of operator: &
+  * dereference operator: *
+  * offset/indexing with []
+* Functions
+  * function calls
+  * function declarations
+  * vararg function calls
+* Bitwise operators
+  * binary operators: & | ^
+  * unary operators: ~
+* Other integer types
+  * char
+  * unsigned char
+  * short
+  * unsigned short
+  * unsigned int
+  * long
+  * unsigned long
+  * long long
+  * unsigned long long
+* Floating point
+  * addition
+  * subtraction
+  * unary minus
+  * multiplication
+  * division
+* Strings
+  * char literals
+  * string literals
+* Flow control
+  * if/else statements
+  * while loops
+  * for loops
+  * do/while loops
+  * break statements in loops
+  * continue statements
+  * switch statements
+  * goto statements
+* Literals
+  * char literals
+  * char literals with escapes
+  * floating decimal literals
+  * floating point exponent literals
+  * integer hex literals
+  * integer octal literals
+  * struct literals
+* Global variables
+  * declarations
+  * definitions without initializers
+  * initializers
+* Structs
+  * declarations
+  * basic type field evaluation
+  * basic type field field assignment
+  * struct rvalue/lvalue
+* Arrays
+  * declarations
+  * definitions
+  * initializers
+* Other
+  * sizeof operator
+  * type casts
+  * typedef
+  * pointer to function
+  * ternary operator
+  * bit fields
+  * static functions
+  * static global variables
