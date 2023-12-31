@@ -42,7 +42,6 @@ Close the VS Code window that opened in Step 3.  Re-run the command from Step 2.
 
 * Integer arithmetic
   * modulus operator
-  * unary plus
 * Logical operators
   * comparison operators: == and !=
   * binary operators: && and ||
