@@ -11,10 +11,10 @@ f:
 	push r13
 	push r14
 	push r15
-	mov eax, edi ; not-equal: load LHS
-	cmp eax, esi ; not-equal: compare
-	setne al ; not-equal: set byte in result
-	movzx eax, al ; not-equal: zero-extend
+	mov eax, edi ; greater: load LHS
+	cmp eax, esi ; greater: compare
+	setg al ; greater: set byte in result
+	movzx eax, al ; greater: zero-extend
 	jmp f.end
 f.end:
 	pop r15

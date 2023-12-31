@@ -72,6 +72,22 @@ func TestNotEqual(t *testing.T) {
 	runTest(t, "not-equal")
 }
 
+func TestLess(t *testing.T) {
+	runTest(t, "less")
+}
+
+func TestLessEqual(t *testing.T) {
+	runTest(t, "less-equal")
+}
+
+func TestGreater(t *testing.T) {
+	runTest(t, "greater")
+}
+
+func TestGreaterEqual(t *testing.T) {
+	runTest(t, "greater-equal")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,

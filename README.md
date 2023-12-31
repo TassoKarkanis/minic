@@ -42,8 +42,6 @@ Close the VS Code window that opened in Step 3.  Re-run the command from Step 2.
 
 * Logical operators
   * binary operators: && and ||
-  * binary operators: < and <=
-  * binary operators: > and >=
   * unary operators: !
 * Basic pointers
   * pointer variables

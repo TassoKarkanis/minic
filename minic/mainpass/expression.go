@@ -219,15 +219,37 @@ func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionCont
 	e := c.exitRule(ctx)
 	defer e()
 
-	exp1 := ctx.ShiftExpression()
-	exp2 := ctx.RelationalExpression()
+	e1 := ctx.RelationalExpression()
+	e2 := ctx.ShiftExpression()
+	lt := ctx.Less()
+	lteq := ctx.LessEqual()
+	gt := ctx.Greater()
+	gteq := ctx.GreaterEqual()
 
 	switch {
-	case exp1 != nil && exp2 == nil:
-		c.cgen.TransferValue(ctx, exp1)
+	case e1 == nil && e2 != nil:
+		c.cgen.TransferValue(ctx, e2)
 
 	default:
-		c.fail("ExitRelationalExpression(): unhandled case!")
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+
+		switch {
+		case lt != nil:
+			c.cgen.Less(ctx, v1, v2)
+
+		case lteq != nil:
+			c.cgen.LessEqual(ctx, v1, v2)
+
+		case gt != nil:
+			c.cgen.Greater(ctx, v1, v2)
+
+		case gteq != nil:
+			c.cgen.GreaterEqual(ctx, v1, v2)
+		}
+
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
 	}
 }
 
