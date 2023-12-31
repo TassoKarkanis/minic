@@ -21,7 +21,7 @@ func (c *MainPass) ExitExpression(ctx *parser.ExpressionContext) {
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitExpression(): unhandled case!")
 	}
 }
 
@@ -91,7 +91,7 @@ func (c *MainPass) ExitLogicalOrExpression(ctx *parser.LogicalOrExpressionContex
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitLogicalOrExpression(): unhandled case!")
 	}
 }
 
@@ -111,7 +111,7 @@ func (c *MainPass) ExitLogicalAndExpression(ctx *parser.LogicalAndExpressionCont
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitLogicalAndExpression(): unhandled case!")
 	}
 }
 
@@ -131,7 +131,7 @@ func (c *MainPass) ExitInclusiveOrExpression(ctx *parser.InclusiveOrExpressionCo
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitInclusiveOrExpression(): unhandled case!")
 	}
 }
 
@@ -151,7 +151,7 @@ func (c *MainPass) ExitExclusiveOrExpression(ctx *parser.ExclusiveOrExpressionCo
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitExclusiveOrExpression(): unhandled case!")
 	}
 }
 
@@ -171,7 +171,7 @@ func (c *MainPass) ExitAndExpression(ctx *parser.AndExpressionContext) {
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitAndExpression(): unhandled case!")
 	}
 }
 
@@ -191,7 +191,7 @@ func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext)
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitEqualityExpression(): unhandled case!")
 	}
 }
 
@@ -211,7 +211,7 @@ func (c *MainPass) ExitRelationalExpression(ctx *parser.RelationalExpressionCont
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitRelationalExpression(): unhandled case!")
 	}
 }
 
@@ -231,7 +231,7 @@ func (c *MainPass) ExitShiftExpression(ctx *parser.ShiftExpressionContext) {
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitShiftExpression(): unhandled case!")
 	}
 }
 
@@ -272,7 +272,7 @@ func (c *MainPass) ExitAdditiveExpression(ctx *parser.AdditiveExpressionContext)
 		c.cgen.ReleaseValue(e2)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitAdditiveExpression(): unhandled case!")
 	}
 }
 
@@ -309,13 +309,13 @@ func (c *MainPass) ExitMultiplicativeExpression(ctx *parser.MultiplicativeExpres
 			c.cgen.Modulus(ctx, v1, v2)
 
 		default:
-			c.fail("unhandled case!")
+			c.fail("ExitMultiplicativeExpression(): unhandled sub-case!")
 		}
 		c.cgen.ReleaseValue(e1)
 		c.cgen.ReleaseValue(e2)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitMultiplicativeExpression(): unhandled case!")
 	}
 }
 
@@ -340,7 +340,7 @@ func (c *MainPass) ExitCastExpression(ctx *parser.CastExpressionContext) {
 		c.cgen.TransferValue(ctx, exp3)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitCastExpression(): unhandled case!")
 	}
 }
 
@@ -352,14 +352,28 @@ func (c *MainPass) ExitUnaryExpression(ctx *parser.UnaryExpressionContext) {
 	e := c.exitRule(ctx)
 	defer e()
 
-	exp1 := ctx.PostfixExpression()
+	e1 := ctx.PostfixExpression()
+	e2 := ctx.UnaryOperator()
+	e3 := ctx.CastExpression()
 
 	switch {
-	case exp1 != nil:
-		c.cgen.TransferValue(ctx, exp1)
+	case e1 != nil:
+		c.cgen.TransferValue(ctx, e1)
+
+	case e2 != nil && e3 != nil:
+		op := e2.(*parser.UnaryOperatorContext)
+		switch {
+		case op.Minus() != nil:
+			val := c.cgen.GetValue(e3)
+			c.cgen.UnaryMinus(ctx, val)
+			c.cgen.ReleaseValue(e3)
+
+		default:
+			c.fail("ExitUnaryExpression(): unhandled sub-case")
+		}
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitUnaryExpression(): unhandled case!")
 	}
 }
 
@@ -378,7 +392,7 @@ func (c *MainPass) ExitPostfixExpression(ctx *parser.PostfixExpressionContext) {
 		c.cgen.TransferValue(ctx, exp1)
 
 	default:
-		c.fail("unhandled case!")
+		c.fail("ExitPostfixExpression(): unhandled case!")
 	}
 }
 

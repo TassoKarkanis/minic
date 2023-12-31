@@ -261,6 +261,21 @@ func (c *Codegen) Subtract(key GetText, v1, v2 *Value) {
 	c.setValue(key, val)
 }
 
+// UnaryMinus generates code to negate a value and registers the result under the given key.
+func (c *Codegen) UnaryMinus(key GetText, v *Value) {
+	// allocate a new value
+	val := c.allocateTransientValue(v.typ, nil)
+
+	// load the source
+	// TODO: use proper register size
+	fmt.Fprintf(c.out, "\tmov %s, %s ; load for negation\n", val.Source(), v.Source())
+
+	// negate the destination
+	fmt.Fprintf(c.out, "\tneg %s\n", val.Source())
+
+	c.setValue(key, val)
+}
+
 // Multiply generates code for the product of two values and registers the result under the given key.
 func (c *Codegen) Multiply(key GetText, v1, v2 *Value) {
 	// Only RAX can do multiplication.  Also, the high bits end up in RDX.

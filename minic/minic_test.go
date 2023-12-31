@@ -52,6 +52,10 @@ func TestVarScope(t *testing.T) {
 	runTest(t, "var-scope")
 }
 
+func TestUnaryMinus(t *testing.T) {
+	runTest(t, "unary-minus")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,
