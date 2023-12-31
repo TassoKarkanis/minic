@@ -339,6 +339,46 @@ func (c *Codegen) divide(key GetText, v1, v2 *Value) {
 	fmt.Fprintf(c.out, "\tidiv %s\n", v2.Source())
 }
 
+// Equal generates code to evaluate equality and registers the result under the given key.
+func (c *Codegen) Equal(key GetText, v1, v2 *Value) {
+	// allocate a new value for the result
+	val := c.allocateTransientValue(v1.typ, nil)
+
+	// move the left operand into the value
+	fmt.Fprintf(c.out, "\tmov %s, %s ; equal: load LHS\n", val.Source(), v1.Source())
+
+	// compare with right operand
+	fmt.Fprintf(c.out, "\tcmp %s, %s ; equal: compare\n", val.Source(), v2.Source())
+
+	// put the result in the low byte
+	fmt.Fprintf(c.out, "\tsete %s ; equal: set byte in result\n", val.register.byteName)
+
+	// zero extend to rest of value
+	fmt.Fprintf(c.out, "\tmovzx %s, %s ; equal: zero-extend\n", val.Source(), val.register.byteName)
+
+	c.setValue(key, val)
+}
+
+// NotEqual generates code to evaluate inequality and registers the result under the given key.
+func (c *Codegen) NotEqual(key GetText, v1, v2 *Value) {
+	// allocate a new value for the result
+	val := c.allocateTransientValue(v1.typ, nil)
+
+	// move the left operand into the value
+	fmt.Fprintf(c.out, "\tmov %s, %s ; not-equal: load LHS\n", val.Source(), v1.Source())
+
+	// compare with right operand
+	fmt.Fprintf(c.out, "\tcmp %s, %s ; not-equal: compare\n", val.Source(), v2.Source())
+
+	// put the result in the low byte
+	fmt.Fprintf(c.out, "\tsetne %s ; not-equal: set byte in result\n", val.register.byteName)
+
+	// zero extend to rest of value
+	fmt.Fprintf(c.out, "\tmovzx %s, %s ; equal: zero-extend\n", val.Source(), val.register.byteName)
+
+	c.setValue(key, val)
+}
+
 // ReturnValue generates code to return a value from the function.
 func (c *Codegen) ReturnValue(key GetText) {
 	// look up the value

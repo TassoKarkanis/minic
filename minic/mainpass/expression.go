@@ -183,12 +183,28 @@ func (c *MainPass) ExitEqualityExpression(ctx *parser.EqualityExpressionContext)
 	e := c.exitRule(ctx)
 	defer e()
 
-	exp1 := ctx.RelationalExpression()
-	exp2 := ctx.EqualityExpression()
+	e1 := ctx.EqualityExpression()
+	e2 := ctx.RelationalExpression()
+	eq := ctx.Equal()
+	neq := ctx.NotEqual()
 
 	switch {
-	case exp1 != nil && exp2 == nil:
-		c.cgen.TransferValue(ctx, exp1)
+	case e1 == nil && e2 != nil:
+		c.cgen.TransferValue(ctx, e2)
+
+	case eq != nil:
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+		c.cgen.Equal(ctx, v1, v2)
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
+
+	case neq != nil:
+		v1 := c.cgen.GetValue(e1)
+		v2 := c.cgen.GetValue(e2)
+		c.cgen.NotEqual(ctx, v1, v2)
+		c.cgen.ReleaseValue(e1)
+		c.cgen.ReleaseValue(e2)
 
 	default:
 		c.fail("ExitEqualityExpression(): unhandled case!")

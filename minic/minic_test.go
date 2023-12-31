@@ -64,6 +64,14 @@ func TestModulus(t *testing.T) {
 	runTest(t, "modulus")
 }
 
+func TestEqual(t *testing.T) {
+	runTest(t, "equal")
+}
+
+func TestNotEqual(t *testing.T) {
+	runTest(t, "not-equal")
+}
+
 func runTest(t *testing.T, name string) {
 	r := testRunner{
 		name:       name,
